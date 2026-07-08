@@ -1,0 +1,124 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { applyAccountBrandfetchMatch } from "@/lib/financial-item-metadata";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+const accountSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(120)
+});
+
+export async function createAccountAction(formData: FormData) {
+  const parsed = accountSchema.safeParse({
+    name: formData.get("name")
+  });
+
+  if (!parsed.success) {
+    throw new Error("Enter an account name.");
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  await enforceRateLimit("accountMutation", user.id);
+
+  const { data: existingAccount, error: selectError } = await supabase
+    .from("counterparties")
+    .select("id")
+    .eq("user_id", user.id)
+    .ilike("name", parsed.data.name)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error("Unable to check that account.");
+  }
+
+  const accountId = existingAccount
+    ? existingAccount.id
+    : await insertAccount(supabase, user.id, parsed.data.name);
+
+  await applyAccountBrandfetchMatch(supabase, {
+    counterpartyId: accountId,
+    query: parsed.data.name,
+    userId: user.id
+  });
+
+  revalidatePath("/accounts");
+  revalidatePath("/entries");
+  revalidatePath("/events");
+  revalidatePath("/dashboard");
+  redirect("/accounts");
+}
+
+export async function updateAccountAction(formData: FormData) {
+  const parsed = accountSchema.safeParse({
+    id: formData.get("id"),
+    name: formData.get("name")
+  });
+
+  if (!parsed.success || !parsed.data.id) {
+    throw new Error("Check the account details and try again.");
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  await enforceRateLimit("accountMutation", user.id);
+
+  const { error } = await supabase
+    .from("counterparties")
+    .update({ name: parsed.data.name })
+    .eq("id", parsed.data.id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    throw new Error("Unable to update that account.");
+  }
+
+  await applyAccountBrandfetchMatch(supabase, {
+    counterpartyId: parsed.data.id,
+    query: parsed.data.name,
+    userId: user.id
+  });
+
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${parsed.data.id}/edit`);
+  revalidatePath("/entries");
+  revalidatePath("/events");
+  revalidatePath("/dashboard");
+  redirect("/accounts");
+}
+
+async function insertAccount(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  userId: string,
+  name: string
+) {
+  const { data, error } = await supabase
+    .from("counterparties")
+    .insert({ kind: "other", name, user_id: userId })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error("Unable to create that account.");
+  }
+
+  return data.id;
+}

@@ -1,0 +1,21 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Private planning/design docs
+docs/
+
+# Supabase local development artifacts
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# Build and coverage outputs
+.next/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
