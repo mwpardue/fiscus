@@ -37,6 +37,7 @@ export type AppTheme = {
 };
 
 export const DEFAULT_THEME_TOKEN: ThemeToken = "alteraest-light";
+export const DEFAULT_COLOR_TAG_TOKEN: ColorTagToken = "blue";
 
 export const COLOR_TAGS: ColorTag[] = [
   { token: "red", label: "Red" },
@@ -205,17 +206,19 @@ export function isThemeToken(token: string | null | undefined): token is ThemeTo
 export function getColorTag(
   colorToken: string | null | undefined,
   themeToken: string | null | undefined = DEFAULT_THEME_TOKEN
-): ResolvedColorTag | null {
-  if (!isColorTagToken(colorToken)) {
-    return null;
-  }
+): ResolvedColorTag {
+  const resolvedColorToken = isColorTagToken(colorToken)
+    ? colorToken
+    : DEFAULT_COLOR_TAG_TOKEN;
 
   const theme = getAppTheme(themeToken);
-  const tag = COLOR_TAGS.find((colorTag) => colorTag.token === colorToken)!;
+  const tag = COLOR_TAGS.find(
+    (colorTag) => colorTag.token === resolvedColorToken
+  )!;
 
   return {
     ...tag,
-    background: theme.colors[colorToken],
+    background: theme.colors[resolvedColorToken],
     foreground: theme.foreground
   };
 }

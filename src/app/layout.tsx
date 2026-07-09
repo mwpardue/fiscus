@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   }
 };
 
+const showLocalPreviewNotice = process.env.NODE_ENV !== "production";
+
 export default function RootLayout({
   children
 }: Readonly<{
@@ -31,7 +33,8 @@ export default function RootLayout({
       <body>
         {children}
         <footer className="site-footer">
-          <p>© 2026 fiscus by altera est. Local development preview.</p>
+          <p>© 2026 fiscus by altera est.</p>
+          {showLocalPreviewNotice ? <p>Local development preview.</p> : null}
           <p>Manual planning estimates only; verify balances before making financial decisions.</p>
         </footer>
       </body>

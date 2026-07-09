@@ -1,8 +1,9 @@
 "use server";
 
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { isColorTagToken } from "@/lib/color-tags";
+import { DEFAULT_COLOR_TAG_TOKEN, isColorTagToken } from "@/lib/color-tags";
 import type { Database } from "@/lib/database.types";
 import { applyFinancialItemMetadata } from "@/lib/financial-item-metadata";
 import { parseMajorAmountToMinor } from "@/lib/money";
@@ -19,6 +20,7 @@ const newEntrySchema = z
     categoryName: z.string().trim().max(80).optional(),
     colorToken: z.string().trim().optional(),
     counterpartyName: z.string().trim().max(120).optional(),
+    returnTo: z.string().trim().optional(),
     amountStatus: z.enum(["fixed", "estimated", "unknown"]),
     expectedAmount: z.string().trim().optional(),
     scheduleMode: z.enum(["ongoing", "finite", "manual"]),
@@ -181,6 +183,7 @@ export async function createEntryAction(
     categoryName: formData.get("categoryName") || undefined,
     colorToken: formData.get("colorToken") || undefined,
     counterpartyName: formData.get("counterpartyName") || undefined,
+    returnTo: formData.get("returnTo") || undefined,
     amountStatus: formData.get("amountStatus"),
     expectedAmount: formData.get("expectedAmount") || undefined,
     scheduleMode: formData.get("scheduleMode"),
@@ -240,6 +243,7 @@ export async function createEntryAction(
     categoryName,
     colorToken,
     counterpartyName,
+    returnTo,
     amountStatus,
     expectedAmount,
     scheduleMode,
@@ -281,7 +285,9 @@ export async function createEntryAction(
   const metadata = {
     accountIconFile: getOptionalFile(formData.get("accountIcon")),
     categoryName,
-    colorToken: isColorTagToken(colorToken) ? colorToken : null,
+    colorToken: isColorTagToken(colorToken)
+      ? colorToken
+      : DEFAULT_COLOR_TAG_TOKEN,
     counterpartyId: accountMode === "existing" ? counterpartyId ?? null : undefined,
     counterpartyName: accountMode === "new" ? counterpartyName : undefined,
     planName: name,
@@ -332,7 +338,7 @@ export async function createEntryAction(
       return { status: "error", message: overrideError };
     }
 
-    redirect("/events");
+    redirect(getSafeReturnTo(returnTo));
   }
 
   const generatedCount = scheduleMode === "finite" ? occurrenceCount ?? 0 : 12;
@@ -444,7 +450,7 @@ export async function createEntryAction(
     }
   }
 
-  redirect("/events");
+  redirect(getSafeReturnTo(returnTo));
 }
 
 async function applyManualOccurrenceOverrides(
@@ -513,4 +519,20 @@ function getErrorMessage(error: unknown) {
 
 function getOptionalFile(value: FormDataEntryValue | null) {
   return value instanceof File ? value : null;
+}
+
+function getSafeReturnTo(returnTo: string | undefined): Route {
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+    return "/events";
+  }
+
+  if (
+    returnTo === "/dashboard" ||
+    returnTo.startsWith("/dashboard?") ||
+    returnTo === "/events"
+  ) {
+    return returnTo as Route;
+  }
+
+  return "/events";
 }

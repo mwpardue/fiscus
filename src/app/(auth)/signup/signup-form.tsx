@@ -48,7 +48,7 @@ export function SignupForm() {
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium text-ink">
+        <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
           Currency
           <input
             className="min-h-12 rounded border border-line bg-white px-3 text-base uppercase"
@@ -60,10 +60,10 @@ export function SignupForm() {
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-medium text-ink">
+        <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
           Timezone
           <input
-            className="min-h-12 rounded border border-line bg-white px-3 text-base"
+            className="min-h-12 min-w-0 rounded border border-line bg-white px-3 text-base"
             name="timezone"
             defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
             required

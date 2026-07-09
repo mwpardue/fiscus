@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, WheelEvent } from "react";
 
 const ACTION_WIDTH = 96;
 const MAX_DRAG_OFFSET = 176;
@@ -11,6 +11,7 @@ const EXECUTE_THRESHOLD = 160;
 const EXIT_ANIMATION_MS = 220;
 const COLLAPSE_ANIMATION_MS = 160;
 const HORIZONTAL_INTENT_RATIO = 1.35;
+const WHEEL_START_THRESHOLD = 8;
 
 export function SwipeableEventCard({
   animateLeadingAction = true,
@@ -33,6 +34,7 @@ export function SwipeableEventCard({
   const isDragging = useRef(false);
   const allowActionClick = useRef(false);
   const pendingActionButton = useRef<HTMLButtonElement | null>(null);
+  const offsetRef = useRef(0);
   const [offset, setOffset] = useState(0);
   const [revealed, setRevealed] = useState<"left" | "right" | null>(null);
   const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(
@@ -45,12 +47,19 @@ export function SwipeableEventCard({
     return Math.max(-MAX_DRAG_OFFSET, Math.min(maxOffset, value));
   }
 
+  function setSwipeOffset(value: number) {
+    const nextOffset = clamp(value);
+    offsetRef.current = nextOffset;
+    setOffset(nextOffset);
+    return nextOffset;
+  }
+
   function close() {
     if (exitDirection) {
       return;
     }
 
-    setOffset(0);
+    setSwipeOffset(0);
     setRevealed(null);
     isDragging.current = false;
   }
@@ -75,10 +84,10 @@ export function SwipeableEventCard({
 
       setRevealed(null);
       setExitDirection(direction);
-      setOffset(direction === "right" ? window.innerWidth : -window.innerWidth);
+      setSwipeOffset(direction === "right" ? window.innerWidth : -window.innerWidth);
 
       window.setTimeout(() => {
-        setCollapsing(true);
+      setCollapsing(true);
       }, EXIT_ANIMATION_MS);
 
       window.setTimeout(() => {
@@ -87,6 +96,50 @@ export function SwipeableEventCard({
         allowActionClick.current = false;
       }, EXIT_ANIMATION_MS + COLLAPSE_ANIMATION_MS);
     }
+  }
+
+  function revealFromOffset(nextOffset: number) {
+    if (nextOffset > REVEAL_THRESHOLD && leadingAction) {
+      setSwipeOffset(ACTION_WIDTH);
+      setRevealed("right");
+      return;
+    }
+
+    if (nextOffset < -REVEAL_THRESHOLD) {
+      setSwipeOffset(-ACTION_WIDTH);
+      setRevealed("left");
+      return;
+    }
+
+    if (Math.abs(nextOffset) < WHEEL_START_THRESHOLD) {
+      close();
+    }
+  }
+
+  function handleWheel(event: WheelEvent<HTMLDivElement>) {
+    if (exitDirection || event.shiftKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    const horizontalDelta = Math.abs(event.deltaX);
+    const verticalDelta = Math.abs(event.deltaY);
+
+    if (
+      horizontalDelta < WHEEL_START_THRESHOLD ||
+      horizontalDelta < verticalDelta * HORIZONTAL_INTENT_RATIO
+    ) {
+      return;
+    }
+
+    const directionOffset = -event.deltaX;
+
+    if (directionOffset > 0 && !leadingAction) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextOffset = setSwipeOffset(offsetRef.current + directionOffset);
+    revealFromOffset(nextOffset);
   }
 
   function handleActionClick(
@@ -131,6 +184,7 @@ export function SwipeableEventCard({
       <div
         className="swipe-card-content"
         style={{ transform: `translateX(${offset}px)` }}
+        onWheel={handleWheel}
         onPointerCancel={close}
         onPointerDown={(event) => {
           if (exitDirection) {
@@ -167,7 +221,7 @@ export function SwipeableEventCard({
             isDragging.current = true;
           }
 
-          setOffset(clamp(startOffset.current + delta));
+          setSwipeOffset(startOffset.current + delta);
         }}
         onPointerUp={() => {
           if (exitDirection) {
@@ -187,13 +241,13 @@ export function SwipeableEventCard({
           }
 
           if (offset > REVEAL_THRESHOLD && leadingAction) {
-            setOffset(ACTION_WIDTH);
+            setSwipeOffset(ACTION_WIDTH);
             setRevealed("right");
             return;
           }
 
           if (offset < -REVEAL_THRESHOLD) {
-            setOffset(-ACTION_WIDTH);
+            setSwipeOffset(-ACTION_WIDTH);
             setRevealed("left");
             return;
           }

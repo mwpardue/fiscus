@@ -3,8 +3,13 @@ import { EntryForm } from "@/app/(app)/entries/new/entry-form";
 import { DEFAULT_THEME_TOKEN } from "@/lib/color-tags";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export default async function NewEventPage() {
+export default async function NewEventPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ returnTo?: string }>;
+}) {
   const supabase = await createServerSupabaseClient();
+  const params = await searchParams;
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -41,6 +46,7 @@ export default async function NewEventPage() {
           <EntryForm
             accounts={accounts ?? []}
             defaultCurrencyCode={profile?.default_currency_code ?? "USD"}
+            returnTo={params?.returnTo}
             themeToken={profile?.theme_token ?? DEFAULT_THEME_TOKEN}
           />
         </section>

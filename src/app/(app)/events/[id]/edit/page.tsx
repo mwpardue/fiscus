@@ -13,11 +13,15 @@ import { updateEventPlanAction } from "../../actions";
 import { EventAccountSelector } from "./account-selector";
 
 export default async function EditEventPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ returnTo?: string }>;
 }) {
   const { id } = await params;
+  const search = await searchParams;
+  const returnTo = search?.returnTo;
   const supabase = await createServerSupabaseClient();
   const {
     data: { user }
@@ -134,6 +138,7 @@ export default async function EditEventPage({
 
           <form action={updateOccurrenceAction} className="grid gap-5">
             <input name="id" type="hidden" value={occurrence.id} />
+            <input name="returnTo" type="hidden" value={returnTo ?? ""} />
             <div>
               <h2 className="text-sm font-semibold text-ink">This event</h2>
               <p className="mt-1 text-sm text-gray-700">
@@ -222,6 +227,7 @@ export default async function EditEventPage({
           <form action={updateEventPlanAction} className="grid min-w-0 gap-5 border-t border-line pt-5">
             <input name="eventId" type="hidden" value={occurrence.id} />
             <input name="id" type="hidden" value={entry.id} />
+            <input name="returnTo" type="hidden" value={returnTo ?? ""} />
             <div>
               <h2 className="text-sm font-semibold text-ink">Whole plan</h2>
               <p className="mt-1 text-sm text-gray-700">
@@ -378,6 +384,7 @@ export default async function EditEventPage({
 
           <form action={archiveOccurrenceAction} className="border-t border-line pt-5">
             <input name="id" type="hidden" value={occurrence.id} />
+            <input name="returnTo" type="hidden" value={returnTo ?? ""} />
             <button className="min-h-12 rounded border border-danger/30 px-4 font-semibold text-danger">
               Delete event
             </button>

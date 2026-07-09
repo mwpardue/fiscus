@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { isColorTagToken } from "@/lib/color-tags";
+import { DEFAULT_COLOR_TAG_TOKEN, isColorTagToken } from "@/lib/color-tags";
 import { applyFinancialItemMetadata } from "@/lib/financial-item-metadata";
 import { parseMajorAmountToMinor } from "@/lib/money";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -21,6 +22,7 @@ const updateEventPlanSchema = z
     expectedAmount: z.string().trim().optional(),
     id: z.string().uuid(),
     name: z.string().trim().min(1).max(120),
+    returnTo: z.string().trim().optional(),
     updateFutureAmounts: z.boolean()
   })
   .superRefine((value, context) => {
@@ -53,6 +55,7 @@ export async function updateEventPlanAction(formData: FormData) {
     expectedAmount: formData.get("expectedAmount") || undefined,
     id: formData.get("id"),
     name: formData.get("name"),
+    returnTo: formData.get("returnTo") || undefined,
     updateFutureAmounts: formData.get("updateFutureAmounts") === "on"
   });
 
@@ -73,7 +76,7 @@ export async function updateEventPlanAction(formData: FormData) {
 
   const colorToken = isColorTagToken(parsed.data.colorToken)
     ? parsed.data.colorToken
-    : null;
+    : DEFAULT_COLOR_TAG_TOKEN;
   const expectedAmountMinor =
     parsed.data.amountStatus === "unknown"
       ? null
@@ -153,7 +156,12 @@ export async function updateEventPlanAction(formData: FormData) {
   revalidatePath("/events");
   revalidatePath(`/events/${parsed.data.eventId}/edit`);
   revalidatePath("/dashboard");
-  redirect(`/events/${parsed.data.eventId}/edit`);
+  redirect(
+    getSafeReturnTo(
+      parsed.data.returnTo,
+      `/events/${parsed.data.eventId}/edit` as Route
+    )
+  );
 }
 
 async function updateFutureOccurrenceDates(
@@ -196,4 +204,23 @@ async function updateFutureOccurrenceDates(
 
 function getOptionalFile(value: FormDataEntryValue | null) {
   return value instanceof File ? value : null;
+}
+
+function getSafeReturnTo(
+  returnTo: string | undefined,
+  fallback: Route
+): Route {
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+    return fallback;
+  }
+
+  if (
+    returnTo === "/dashboard" ||
+    returnTo.startsWith("/dashboard?") ||
+    returnTo === "/events"
+  ) {
+    return returnTo as Route;
+  }
+
+  return fallback;
 }

@@ -13,7 +13,8 @@ const updateOccurrenceSchema = z.object({
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   expectedAmount: z.string().trim().optional(),
   id: z.string().uuid(),
-  notes: z.string().trim().max(1000).optional()
+  notes: z.string().trim().max(1000).optional(),
+  returnTo: z.string().optional()
 });
 
 const archiveOccurrenceSchema = z.object({
@@ -39,7 +40,8 @@ export async function updateOccurrenceAction(formData: FormData) {
     dueDate: formData.get("dueDate"),
     expectedAmount: formData.get("expectedAmount") || undefined,
     id: formData.get("id"),
-    notes: formData.get("notes") || undefined
+    notes: formData.get("notes") || undefined,
+    returnTo: formData.get("returnTo") || undefined
   });
 
   if (!parsed.success) {
@@ -84,7 +86,7 @@ export async function updateOccurrenceAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/events");
   revalidatePath(`/events/${parsed.data.id}/edit`);
-  redirect(`/events/${parsed.data.id}/edit`);
+  redirect(getSafeReturnPath(parsed.data.returnTo, `/events/${parsed.data.id}/edit` as Route));
 }
 
 export async function archiveOccurrenceAction(formData: FormData) {

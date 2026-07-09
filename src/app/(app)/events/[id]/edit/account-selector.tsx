@@ -21,7 +21,7 @@ export function EventAccountSelector({
 
   return (
     <>
-      <div className="grid gap-2 text-sm font-medium text-ink">
+      <div className="grid min-w-0 gap-2 text-sm font-medium text-ink">
         <label htmlFor="edit-event-account">Account</label>
         <select
           id="edit-event-account"
@@ -67,7 +67,7 @@ export function EventAccountSelector({
 
       {accountMode === "new" ? (
         <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium text-ink">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             New account name
             <input
               className="min-h-12 rounded border border-line bg-white px-3 text-base"
@@ -76,11 +76,11 @@ export function EventAccountSelector({
               required
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-ink">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             Account icon
             <input
               accept="image/png,image/jpeg,image/webp"
-              className="min-h-12 rounded border border-line bg-white px-3 py-2 text-base"
+              className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
               name="accountIcon"
               type="file"
             />

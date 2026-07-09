@@ -171,12 +171,12 @@ export default async function EventsPage() {
                 }
               >
                 <article
-                  className="relative grid gap-2 p-3 pr-12 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  className="relative grid gap-2 p-3 pr-14 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                 >
                   <Link
                     aria-label={`Edit ${event.financial_items?.name ?? "event"}`}
                     className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded border border-line bg-white text-ink"
-                    href={`/events/${event.id}/edit`}
+                    href={`/events/${event.id}/edit?returnTo=${encodeURIComponent("/events")}`}
                     title="Edit"
                   >
                     <PencilIcon />

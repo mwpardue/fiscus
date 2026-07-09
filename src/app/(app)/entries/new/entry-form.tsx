@@ -20,10 +20,12 @@ const initialState: NewEntryActionState = {
 export function EntryForm({
   accounts,
   defaultCurrencyCode,
+  returnTo,
   themeToken
 }: {
   accounts: Array<{ id: string; name: string }>;
   defaultCurrencyCode: string;
+  returnTo?: string;
   themeToken: string;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -155,9 +157,11 @@ export function EntryForm({
 
   return (
     <form action={formAction} className="grid gap-5">
+      <input name="returnTo" type="hidden" value={returnTo ?? ""} />
+
       <fieldset className="grid gap-3">
         <legend className="text-sm font-semibold text-ink">Type</legend>
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
           <label className="flex min-h-12 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold">
             <input
               className="mr-2"
@@ -187,7 +191,7 @@ export function EntryForm({
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium text-ink">
+        <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
           Category
           <input
             className="min-h-12 rounded border border-line bg-white px-3 text-base"
@@ -196,7 +200,7 @@ export function EntryForm({
           />
         </label>
 
-        <div className="grid gap-2 text-sm font-medium text-ink">
+        <div className="grid min-w-0 gap-2 text-sm font-medium text-ink">
           <label htmlFor="new-event-account">Account</label>
           <select
             id="new-event-account"
@@ -243,7 +247,7 @@ export function EntryForm({
 
       {accountMode === "new" ? (
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium text-ink">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             New account name
             <input
               className="min-h-12 rounded border border-line bg-white px-3 text-base"
@@ -252,11 +256,11 @@ export function EntryForm({
               required
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-ink">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             Account icon
             <input
               accept="image/png,image/jpeg,image/webp"
-              className="min-h-12 rounded border border-line bg-white px-3 py-2 text-base"
+              className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
               name="accountIcon"
               type="file"
             />
@@ -268,11 +272,11 @@ export function EntryForm({
       ) : null}
 
       <div className="grid gap-4">
-        <label className="grid gap-2 text-sm font-medium text-ink">
+        <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
           Plan icon override
           <input
             accept="image/png,image/jpeg,image/webp"
-            className="min-h-12 rounded border border-line bg-white px-3 py-2 text-base"
+            className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
             name="planIcon"
             type="file"
           />

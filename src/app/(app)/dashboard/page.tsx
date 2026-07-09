@@ -246,7 +246,7 @@ export default async function DashboardPage({
             {calendar.days.map((day) => (
               <Link
                 aria-label={
-                  `${day.label}, ${day.count} scheduled events`
+                  `${day.label}, ${day.colorTokens.length} scheduled events`
                 }
                 className={
                   [
@@ -258,7 +258,10 @@ export default async function DashboardPage({
                         : "border-line bg-white text-gray-500"
                   ].join(" ")
                 }
-                href={buildDashboardHref(day.date.slice(0, 7), day.date)}
+                href={buildDashboardHref(
+                  day.date.slice(0, 7),
+                  day.date === selectedDay ? undefined : day.date
+                )}
                 key={day.date}
               >
                 <div className="flex h-full flex-col justify-between gap-1">
@@ -271,9 +274,18 @@ export default async function DashboardPage({
                   >
                     {day.dayOfMonth}
                   </span>
-                  {day.count > 0 ? (
-                    <span className="inline-flex h-6 min-w-6 items-center justify-center self-end rounded-full bg-mint px-2 text-xs font-semibold text-white">
-                      {day.count}
+                  {day.colorTokens.length > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="flex h-5 max-w-full items-center justify-end overflow-hidden pl-2"
+                    >
+                      {day.colorTokens.slice(0, 4).map((colorToken, index) => (
+                        <span
+                          className="-ml-1.5 block h-3.5 w-3.5 rounded-full border border-white shadow-sm first:ml-0"
+                          key={`${day.date}-${colorToken}-${index}`}
+                          style={calendarDotStyle(colorToken, themeToken)}
+                        />
+                      ))}
                     </span>
                   ) : (
                     <span className="sr-only">No scheduled events</span>
@@ -318,17 +330,17 @@ export default async function DashboardPage({
               </p>
               <Link
                 className="mt-4 inline-flex min-h-11 items-center rounded bg-mint px-4 text-sm font-semibold text-white"
-                href="/events/new"
+                href={buildNewEventHref(selectedMonth, selectedDay)}
               >
                 New
               </Link>
             </div>
           ) : null}
 
-          <div className="grid gap-4">
+          <div className="grid gap-5">
             {weeklyGroups.map((week) => (
               <section
-                className="grid gap-2"
+                className="grid gap-3 border-t border-line pt-5 first:border-t-0 first:pt-0"
                 key={`${week.weekStart}-${week.weekEnd}`}
               >
                 <div>
@@ -355,7 +367,10 @@ export default async function DashboardPage({
                           occurrence.expected_amount_minor ?? 0,
                           occurrence.currency_code
                         );
-                  const returnTo = `/dashboard?month=${selectedMonth}`;
+                  const returnTo = buildDashboardHref(
+                    selectedMonth,
+                    selectedDay ?? undefined
+                  );
                   const leadingAction =
                     occurrence.lifecycle_status === "upcoming" &&
                     occurrence.amount_status !== "unknown" &&
@@ -396,7 +411,7 @@ export default async function DashboardPage({
                       }
                     >
                       <article
-                        className="relative grid gap-2 p-3 pr-12 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                        className="relative grid gap-2 p-3 pr-14 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                         style={entryAccentStyle(
                           occurrence.financial_items?.color_token,
                           themeToken
@@ -405,7 +420,7 @@ export default async function DashboardPage({
                         <Link
                           aria-label={`Edit ${occurrence.financial_items?.name ?? "event"}`}
                           className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded border border-line bg-white text-ink"
-                          href={`/events/${occurrence.id}/edit`}
+                          href={buildEditEventHref(occurrence.id, returnTo)}
                           title="Edit"
                         >
                           <PencilIcon />
@@ -443,7 +458,7 @@ export default async function DashboardPage({
                   );
                 })}
 
-                <div className="grid gap-1 rounded border border-line bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div className="grid gap-1 rounded border border-mint/20 bg-mint/10 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
                   <p className="text-sm font-medium text-gray-700">
                     Weekly projected change:{" "}
                     <span className="text-ink">
@@ -470,7 +485,7 @@ export default async function DashboardPage({
       <Link
         aria-label="New event"
         className="fixed bottom-5 right-5 z-20 inline-flex h-14 w-14 items-center justify-center rounded-full bg-mint text-white shadow-lg shadow-black/20"
-        href="/events/new"
+        href={buildNewEventHref(selectedMonth, selectedDay)}
         title="New event"
       >
         <PencilIcon />
@@ -491,6 +506,17 @@ function entryAccentStyle(
 
   return {
     borderLeft: `6px solid ${color.background}`
+  };
+}
+
+function calendarDotStyle(
+  colorToken: string | null | undefined,
+  themeToken: string | null | undefined
+) {
+  const color = getColorTag(colorToken, themeToken);
+
+  return {
+    backgroundColor: color?.background ?? "var(--color-mint)"
   };
 }
 
@@ -742,12 +768,19 @@ function buildCalendarFrame(month: string, weekStartsOn: number) {
 
 function fillCalendarCounts(
   calendar: ReturnType<typeof buildCalendarFrame>,
-  occurrences: Array<Pick<DashboardOccurrence, "due_date">>
+  occurrences: Array<
+    Pick<DashboardOccurrence, "due_date"> & {
+      financial_items?: { color_token: string | null } | null;
+    }
+  >
 ) {
-  const occurrenceCounts = occurrences.reduce<Record<string, number>>(
-    (counts, occurrence) => {
-      counts[occurrence.due_date] = (counts[occurrence.due_date] ?? 0) + 1;
-      return counts;
+  const occurrenceColorTokens = occurrences.reduce<Record<string, string[]>>(
+    (tokensByDate, occurrence) => {
+      tokensByDate[occurrence.due_date] = [
+        ...(tokensByDate[occurrence.due_date] ?? []),
+        occurrence.financial_items?.color_token ?? ""
+      ];
+      return tokensByDate;
     },
     {}
   );
@@ -756,7 +789,7 @@ function fillCalendarCounts(
     ...calendar,
     days: calendar.days.map((day) => ({
       ...day,
-      count: occurrenceCounts[day.date] ?? 0
+      colorTokens: occurrenceColorTokens[day.date] ?? []
     }))
   };
 }
@@ -791,6 +824,16 @@ function buildDashboardHref(month: string, day?: string) {
   }
 
   return `/dashboard?${params.toString()}` as Route;
+}
+
+function buildNewEventHref(month: string, day: string | null) {
+  return `/events/new?returnTo=${encodeURIComponent(
+    buildDashboardHref(month, day ?? undefined)
+  )}` as Route;
+}
+
+function buildEditEventHref(id: string, returnTo: Route) {
+  return `/events/${id}/edit?returnTo=${encodeURIComponent(returnTo)}` as Route;
 }
 
 function formatSelectedDayLabel(day: string) {
