@@ -35,6 +35,8 @@ const RATE_LIMITS = {
 
 export type RateLimitName = keyof typeof RATE_LIMITS;
 
+export class RateLimitExceededError extends Error {}
+
 export async function enforceRateLimit(
   name: RateLimitName,
   identifier: string
@@ -53,6 +55,6 @@ export async function enforceRateLimit(
   }
 
   if (!data) {
-    throw new Error(config.message);
+    throw new RateLimitExceededError(config.message);
   }
 }

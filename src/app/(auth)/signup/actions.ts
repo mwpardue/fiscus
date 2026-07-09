@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSiteUrl } from "@/lib/env";
 import { ensureProfile } from "@/lib/profiles";
-import { enforceRateLimit } from "@/lib/rate-limit";
+import { enforceRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+const defaultAllowedSignupEmails = ["mpardue@alteraest.com"];
 
 const signupSchema = z
   .object({
@@ -50,6 +52,11 @@ export async function signupAction(
 
   const supabase = await createServerSupabaseClient();
   const { email, password, timezone, defaultCurrencyCode } = parsed.data;
+
+  if (!isSignupEmailAllowed(email)) {
+    redirect("/signup/unavailable");
+  }
+
   const rateLimitError = await getRateLimitError(email);
 
   if (rateLimitError) {
@@ -95,10 +102,22 @@ async function getRateLimitError(email: string) {
   try {
     await enforceRateLimit("authEmail", email);
     return null;
-  } catch {
+  } catch (error) {
     return {
       status: "error" as const,
-      message: "Too many account attempts. Wait a few minutes and try again."
+      message:
+        error instanceof RateLimitExceededError
+          ? error.message
+          : "Unable to verify account limits. Try again after setup is complete."
     };
   }
+}
+
+function isSignupEmailAllowed(email: string) {
+  const allowedEmails =
+    process.env.FISCUS_ALLOWED_SIGNUP_EMAILS?.split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean) ?? defaultAllowedSignupEmails;
+
+  return allowedEmails.includes(email.toLowerCase());
 }

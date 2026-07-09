@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSiteUrl } from "@/lib/env";
-import { enforceRateLimit } from "@/lib/rate-limit";
+import { enforceRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const loginSchema = z.object({
@@ -82,10 +82,13 @@ async function getRateLimitError(email: string) {
   try {
     await enforceRateLimit("authEmail", email);
     return null;
-  } catch {
+  } catch (error) {
     return {
       status: "error" as const,
-      message: "Too many sign-in attempts. Wait a few minutes and try again."
+      message:
+        error instanceof RateLimitExceededError
+          ? error.message
+          : "Unable to verify sign-in limits. Try again after setup is complete."
     };
   }
 }
