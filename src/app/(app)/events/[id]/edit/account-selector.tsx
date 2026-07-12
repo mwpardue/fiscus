@@ -77,6 +77,15 @@ export function EventAccountSelector({
             />
           </label>
           <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
+            Account website
+            <input
+              className="min-h-12 rounded border border-line bg-white px-3 text-base"
+              name="counterpartyWebsiteUrl"
+              placeholder="att.com"
+              type="text"
+            />
+          </label>
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             Account icon
             <input
               accept="image/png,image/jpeg,image/webp"

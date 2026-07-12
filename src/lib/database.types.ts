@@ -73,6 +73,7 @@ export type Database = {
           notes: string | null;
           updated_at: string;
           user_id: string;
+          website_url: string | null;
         };
         Insert: {
           brandfetch_brand_id?: string | null;
@@ -89,6 +90,7 @@ export type Database = {
           notes?: string | null;
           updated_at?: string;
           user_id: string;
+          website_url?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["counterparties"]["Insert"]>;
         Relationships: [];

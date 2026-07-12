@@ -18,6 +18,12 @@ const updateEventPlanSchema = z
     colorToken: z.string().trim().optional(),
     counterpartyId: z.string().uuid().optional(),
     counterpartyName: z.string().trim().max(120).optional(),
+    counterpartyWebsiteUrl: z
+      .string()
+      .trim()
+      .max(255)
+      .optional()
+      .transform((value) => normalizeWebsiteUrl(value)),
     eventId: z.string().uuid(),
     expectedAmount: z.string().trim().optional(),
     id: z.string().uuid(),
@@ -51,6 +57,7 @@ export async function updateEventPlanAction(formData: FormData) {
     colorToken: formData.get("colorToken") || undefined,
     counterpartyId: formData.get("counterpartyId") || undefined,
     counterpartyName: formData.get("counterpartyName") || undefined,
+    counterpartyWebsiteUrl: formData.get("counterpartyWebsiteUrl") || undefined,
     eventId: formData.get("eventId"),
     expectedAmount: formData.get("expectedAmount") || undefined,
     id: formData.get("id"),
@@ -148,6 +155,10 @@ export async function updateEventPlanAction(formData: FormData) {
       parsed.data.accountMode === "new"
         ? parsed.data.counterpartyName
         : undefined,
+    counterpartyWebsiteUrl:
+      parsed.data.accountMode === "new"
+        ? parsed.data.counterpartyWebsiteUrl
+        : undefined,
     planName: parsed.data.name,
     planIconFile: getOptionalFile(formData.get("planIcon")),
     themeToken: null
@@ -223,4 +234,17 @@ function getSafeReturnTo(
   }
 
   return fallback;
+}
+
+function normalizeWebsiteUrl(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value.startsWith("http") ? value : `https://${value}`);
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }

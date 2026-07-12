@@ -23,6 +23,7 @@ import {
   completeOccurrenceFromCardAction
 } from "../occurrences/actions";
 import { updateBalanceAnchorAction } from "./actions";
+import { CalendarNavigation } from "./calendar-navigation";
 
 type DashboardPayment = {
   amount_minor: number;
@@ -66,6 +67,7 @@ export default async function DashboardPage({
   const calendarFrame = buildCalendarFrame(selectedMonth, weekStartsOn);
   const [
     { data: occurrences, error },
+    { data: projectionOccurrences },
     { data: payments },
     { data: counterparties }
   ] = await Promise.all([
@@ -74,19 +76,37 @@ export default async function DashboardPage({
       .select(
         "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id,icon_storage_path,brandfetch_icon_url)"
       )
+      .eq("user_id", user.id)
       .is("archived_at", null)
       .eq("lifecycle_status", "upcoming")
       .gte("due_date", calendarFrame.visibleStart)
       .lte("due_date", calendarFrame.visibleEnd)
       .order("due_date", { ascending: true }),
+    selectedDay && selectedDay < today
+      ? Promise.resolve({ data: [] as DashboardOccurrence[] })
+      : supabase
+          .from("occurrences")
+          .select(
+            "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id,icon_storage_path,brandfetch_icon_url)"
+          )
+          .eq("user_id", user.id)
+          .is("archived_at", null)
+          .eq("lifecycle_status", "upcoming")
+          .gte("due_date", today)
+          .lte("due_date", selectedDay ?? calendarFrame.visibleEnd)
+          .order("due_date", { ascending: true }),
     balanceAnchorRecordedAt
       ? supabase
           .from("payments")
           .select("amount_minor,created_at,kind,status")
+          .eq("user_id", user.id)
           .eq("status", "active")
           .gt("created_at", balanceAnchorRecordedAt)
       : Promise.resolve({ data: [] as DashboardPayment[] }),
-    supabase.from("counterparties").select("id,icon_storage_path,brandfetch_icon_url")
+    supabase
+      .from("counterparties")
+      .select("id,icon_storage_path,brandfetch_icon_url")
+      .eq("user_id", user.id)
   ]);
 
   const calendarOccurrenceRows = (occurrences ?? []) as DashboardOccurrence[];
@@ -102,9 +122,9 @@ export default async function DashboardPage({
       }
     ])
   );
-  const eventIcons = await resolveEntityIcons(
+  const calendarEventIcons = await resolveEntityIcons(
     supabase,
-    visibleOccurrenceRows.map((occurrence) => ({
+    calendarOccurrenceRows.map((occurrence) => ({
       accountBrandfetchIconUrl: occurrence.financial_items?.counterparty_id
         ? accountIconById.get(occurrence.financial_items.counterparty_id)
             ?.brandfetchIconUrl ?? null
@@ -119,9 +139,9 @@ export default async function DashboardPage({
     }))
   );
   const iconByOccurrenceId = new Map(
-    visibleOccurrenceRows.map((occurrence, index) => [
+    calendarOccurrenceRows.map((occurrence, index) => [
       occurrence.id,
-      eventIcons[index]
+      calendarEventIcons[index]
     ])
   );
   const summary = summarizeOccurrences(visibleOccurrenceRows);
@@ -134,10 +154,16 @@ export default async function DashboardPage({
       : balanceAnchorAmountMinor + completedActivityMinor;
   const weeklyGroups = buildWeeklyOccurrenceGroups(
     visibleOccurrenceRows,
+    (projectionOccurrences ?? []) as DashboardOccurrence[],
     weekStartsOn,
-    adjustedCurrentBalanceMinor
+    adjustedCurrentBalanceMinor,
+    selectedDay
   );
-  const calendar = fillCalendarCounts(calendarFrame, calendarOccurrenceRows);
+  const calendar = fillCalendarCounts(
+    calendarFrame,
+    calendarOccurrenceRows,
+    iconByOccurrenceId
+  );
 
   return (
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
@@ -214,87 +240,13 @@ export default async function DashboardPage({
           </section>
         ) : null}
 
-        <section className="grid gap-3 rounded border border-line bg-white p-4">
-          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-            <Link
-              aria-label="Previous month"
-              className="inline-flex h-10 w-10 items-center justify-center rounded border border-line bg-white text-ink"
-              href={`/dashboard?month=${calendar.previousMonth}`}
-            >
-              <ChevronLeftIcon />
-            </Link>
-            <div className="text-center">
-              <h2 className="text-lg font-semibold text-ink">{calendar.label}</h2>
-            </div>
-            <Link
-              aria-label="Next month"
-              className="inline-flex h-10 w-10 items-center justify-center rounded border border-line bg-white text-ink"
-              href={`/dashboard?month=${calendar.nextMonth}`}
-            >
-              <ChevronRightIcon />
-            </Link>
-          </div>
-          <div className="grid grid-cols-7 gap-1" aria-label={`${calendar.label} upcoming activity calendar`}>
-            {calendar.weekdays.map((weekday) => (
-              <div
-                className="py-1 text-center text-xs font-semibold uppercase text-gray-600"
-                key={weekday}
-              >
-                {weekday}
-              </div>
-            ))}
-            {calendar.days.map((day) => (
-              <Link
-                aria-label={
-                  `${day.label}, ${day.colorTokens.length} scheduled events`
-                }
-                className={
-                  [
-                    "min-h-14 rounded border p-2",
-                    day.date === selectedDay
-                      ? "border-mint bg-mint/10"
-                      : day.inCurrentMonth
-                        ? "border-line bg-paper"
-                        : "border-line bg-white text-gray-500"
-                  ].join(" ")
-                }
-                href={buildDashboardHref(
-                  day.date.slice(0, 7),
-                  day.date === selectedDay ? undefined : day.date
-                )}
-                key={day.date}
-              >
-                <div className="flex h-full flex-col justify-between gap-1">
-                  <span
-                    className={
-                      day.inCurrentMonth
-                        ? "text-sm font-semibold text-ink"
-                        : "text-sm font-semibold text-gray-500"
-                    }
-                  >
-                    {day.dayOfMonth}
-                  </span>
-                  {day.colorTokens.length > 0 ? (
-                    <span
-                      aria-hidden="true"
-                      className="flex h-5 max-w-full items-center justify-end overflow-hidden pl-2"
-                    >
-                      {day.colorTokens.slice(0, 4).map((colorToken, index) => (
-                        <span
-                          className="-ml-1.5 block h-3.5 w-3.5 rounded-full border border-white shadow-sm first:ml-0"
-                          key={`${day.date}-${colorToken}-${index}`}
-                          style={calendarDotStyle(colorToken, themeToken)}
-                        />
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="sr-only">No scheduled events</span>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
+        <CalendarNavigation
+          calendar={calendar}
+          selectedDay={selectedDay}
+          selectedMonth={selectedMonth}
+          themeToken={themeToken}
+          today={today}
+        />
 
         <section className="grid gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -306,14 +258,6 @@ export default async function DashboardPage({
                 </p>
               ) : null}
             </div>
-            {selectedDay ? (
-              <Link
-                className="text-sm font-semibold text-mint"
-                href={`/dashboard?month=${selectedMonth}`}
-              >
-                Clear day
-              </Link>
-            ) : null}
           </div>
 
           {error ? (
@@ -466,7 +410,11 @@ export default async function DashboardPage({
                     </span>
                   </p>
                   <div className="sm:text-right">
-                    <p className="text-sm text-gray-700">Projected week-end balance</p>
+                    <p className="text-sm text-gray-700">
+                      {selectedDay
+                        ? "Projected selected-day balance"
+                        : "Projected week-end balance"}
+                    </p>
                     <p className="text-xl font-semibold text-ink">
                       {week.endingBalanceMinor === null
                         ? "Set balance"
@@ -509,17 +457,6 @@ function entryAccentStyle(
   };
 }
 
-function calendarDotStyle(
-  colorToken: string | null | undefined,
-  themeToken: string | null | undefined
-) {
-  const color = getColorTag(colorToken, themeToken);
-
-  return {
-    backgroundColor: color?.background ?? "var(--color-mint)"
-  };
-}
-
 function ProjectionMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-w-0 gap-1">
@@ -528,40 +465,6 @@ function ProjectionMetric({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
-  );
-}
-
-function ChevronLeftIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      <path d="m9 18 6-6-6-6" />
-    </svg>
   );
 }
 
@@ -597,8 +500,10 @@ function summarizeCompletedActivity(payments: DashboardPayment[]) {
 
 function buildWeeklyOccurrenceGroups(
   occurrences: DashboardOccurrence[],
+  projectionOccurrences: DashboardOccurrence[],
   weekStartsOn: number,
-  startingBalanceMinor: number | null
+  startingBalanceMinor: number | null,
+  selectedDay: string | null
 ) {
   const grouped = new Map<
     string,
@@ -625,18 +530,41 @@ function buildWeeklyOccurrenceGroups(
     grouped.set(weekStart, group);
   }
 
-  let runningBalanceMinor = startingBalanceMinor;
+  if (selectedDay && grouped.size === 0) {
+    const weekStart = getWeekStartDate(selectedDay, weekStartsOn);
+    grouped.set(weekStart, {
+      occurrences: [],
+      projectedDeltaMinor: 0,
+      weekEnd: formatDateOnly(addUtcDays(parseDateOnly(weekStart), 6)),
+      weekStart
+    });
+  }
+
+  let runningProjectionMinor = startingBalanceMinor;
+  let projectionIndex = 0;
+  const sortedProjectionOccurrences = [...projectionOccurrences].sort((first, second) =>
+    first.due_date.localeCompare(second.due_date)
+  );
 
   return Array.from(grouped.values())
     .sort((first, second) => first.weekStart.localeCompare(second.weekStart))
     .map((group) => {
-      if (runningBalanceMinor !== null) {
-        runningBalanceMinor += group.projectedDeltaMinor;
+      const balanceTargetDate = selectedDay ?? group.weekEnd;
+
+      while (
+        runningProjectionMinor !== null &&
+        projectionIndex < sortedProjectionOccurrences.length &&
+        sortedProjectionOccurrences[projectionIndex]!.due_date <= balanceTargetDate
+      ) {
+        runningProjectionMinor += getProjectedOccurrenceDelta(
+          sortedProjectionOccurrences[projectionIndex]!
+        );
+        projectionIndex += 1;
       }
 
       return {
         ...group,
-        endingBalanceMinor: runningBalanceMinor
+        endingBalanceMinor: runningProjectionMinor
       };
     });
 }
@@ -768,19 +696,38 @@ function buildCalendarFrame(month: string, weekStartsOn: number) {
 
 function fillCalendarCounts(
   calendar: ReturnType<typeof buildCalendarFrame>,
-  occurrences: Array<
-    Pick<DashboardOccurrence, "due_date"> & {
-      financial_items?: { color_token: string | null } | null;
-    }
-  >
+  occurrences: DashboardOccurrence[],
+  iconByOccurrenceId: Map<string, Awaited<ReturnType<typeof resolveEntityIcons>>[number] | undefined>
 ) {
-  const occurrenceColorTokens = occurrences.reduce<Record<string, string[]>>(
-    (tokensByDate, occurrence) => {
-      tokensByDate[occurrence.due_date] = [
-        ...(tokensByDate[occurrence.due_date] ?? []),
-        occurrence.financial_items?.color_token ?? ""
+  const occurrencesByDate = occurrences.reduce<
+    Record<
+      string,
+      Array<{
+        amountLabel: string;
+        colorToken: string;
+        icon: Awaited<ReturnType<typeof resolveEntityIcons>>[number] | undefined;
+        title: string;
+      }>
+    >
+  >(
+    (eventsByDate, occurrence) => {
+      eventsByDate[occurrence.due_date] = [
+        ...(eventsByDate[occurrence.due_date] ?? []),
+        {
+          amountLabel:
+            occurrence.amount_status === "unknown" ||
+            occurrence.expected_amount_minor === null
+              ? "Unknown"
+              : formatMinorAmount(
+                  occurrence.expected_amount_minor,
+                  occurrence.currency_code
+                ),
+          colorToken: occurrence.financial_items?.color_token ?? "",
+          icon: iconByOccurrenceId.get(occurrence.id),
+          title: occurrence.financial_items?.name ?? "Untitled"
+        }
       ];
-      return tokensByDate;
+      return eventsByDate;
     },
     {}
   );
@@ -789,7 +736,9 @@ function fillCalendarCounts(
     ...calendar,
     days: calendar.days.map((day) => ({
       ...day,
-      colorTokens: occurrenceColorTokens[day.date] ?? []
+      colorTokens:
+        occurrencesByDate[day.date]?.map((event) => event.colorToken) ?? [],
+      events: occurrencesByDate[day.date] ?? []
     }))
   };
 }

@@ -9,12 +9,19 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const accountSchema = z.object({
   id: z.string().uuid().optional(),
-  name: z.string().trim().min(1).max(120)
+  name: z.string().trim().min(1).max(120),
+  websiteUrl: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .transform((value) => normalizeWebsiteUrl(value))
 });
 
 export async function createAccountAction(formData: FormData) {
   const parsed = accountSchema.safeParse({
-    name: formData.get("name")
+    name: formData.get("name"),
+    websiteUrl: formData.get("websiteUrl") || undefined
   });
 
   if (!parsed.success) {
@@ -45,11 +52,24 @@ export async function createAccountAction(formData: FormData) {
 
   const accountId = existingAccount
     ? existingAccount.id
-    : await insertAccount(supabase, user.id, parsed.data.name);
+    : await insertAccount(supabase, user.id, parsed.data.name, parsed.data.websiteUrl);
+
+  if (existingAccount) {
+    const { error: updateError } = await supabase
+      .from("counterparties")
+      .update({ website_url: parsed.data.websiteUrl })
+      .eq("id", accountId)
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      throw new Error("Unable to update that account.");
+    }
+  }
 
   await applyAccountBrandfetchMatch(supabase, {
     counterpartyId: accountId,
     query: parsed.data.name,
+    websiteUrl: parsed.data.websiteUrl,
     userId: user.id
   });
 
@@ -63,7 +83,8 @@ export async function createAccountAction(formData: FormData) {
 export async function updateAccountAction(formData: FormData) {
   const parsed = accountSchema.safeParse({
     id: formData.get("id"),
-    name: formData.get("name")
+    name: formData.get("name"),
+    websiteUrl: formData.get("websiteUrl") || undefined
   });
 
   if (!parsed.success || !parsed.data.id) {
@@ -83,7 +104,7 @@ export async function updateAccountAction(formData: FormData) {
 
   const { error } = await supabase
     .from("counterparties")
-    .update({ name: parsed.data.name })
+    .update({ name: parsed.data.name, website_url: parsed.data.websiteUrl })
     .eq("id", parsed.data.id)
     .eq("user_id", user.id);
 
@@ -94,6 +115,7 @@ export async function updateAccountAction(formData: FormData) {
   await applyAccountBrandfetchMatch(supabase, {
     counterpartyId: parsed.data.id,
     query: parsed.data.name,
+    websiteUrl: parsed.data.websiteUrl,
     userId: user.id
   });
 
@@ -108,11 +130,12 @@ export async function updateAccountAction(formData: FormData) {
 async function insertAccount(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   userId: string,
-  name: string
+  name: string,
+  websiteUrl: string | null
 ) {
   const { data, error } = await supabase
     .from("counterparties")
-    .insert({ kind: "other", name, user_id: userId })
+    .insert({ kind: "other", name, user_id: userId, website_url: websiteUrl })
     .select("id")
     .single();
 
@@ -121,4 +144,17 @@ async function insertAccount(
   }
 
   return data.id;
+}
+
+function normalizeWebsiteUrl(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value.startsWith("http") ? value : `https://${value}`);
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }

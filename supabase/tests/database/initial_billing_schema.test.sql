@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(48);
+select plan(49);
 
 insert into auth.users (id, email)
 values
@@ -612,6 +612,13 @@ select results_eq(
   array[false],
   'third request over limit is rejected'
 );
+set local request.jwt.claim.sub = '33333333-3333-4333-8333-333333333333';
+select results_eq(
+  $$select public.check_rate_limit('stale_auth_action', 'stale@example.test', 2, 60)$$,
+  array[true],
+  'stale auth uid does not break rate limiting'
+);
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
 select throws_ok(
   $$select count(*) from public.rate_limit_events$$,
   '42501',

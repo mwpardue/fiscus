@@ -1,26 +1,3 @@
-create table public.rate_limit_events (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users (id) on delete cascade,
-  action text not null,
-  identifier_hash text not null,
-  created_at timestamptz not null default now(),
-  constraint rate_limit_events_action_not_blank check (btrim(action) <> ''),
-  constraint rate_limit_events_identifier_hash_not_blank check (
-    btrim(identifier_hash) <> ''
-  )
-);
-
-create index rate_limit_events_lookup_idx
-  on public.rate_limit_events (action, identifier_hash, created_at desc);
-
-create index rate_limit_events_user_lookup_idx
-  on public.rate_limit_events (user_id, action, created_at desc)
-  where user_id is not null;
-
-alter table public.rate_limit_events enable row level security;
-
-revoke all on table public.rate_limit_events from anon, authenticated;
-
 create or replace function public.check_rate_limit(
   p_action text,
   p_identifier text,

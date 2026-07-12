@@ -62,6 +62,27 @@ export async function lookupBrandfetchMatch(query: string) {
   } satisfies BrandfetchMatch;
 }
 
+export function buildBrandfetchMatchFromWebsite(websiteUrl: string | null | undefined) {
+  const domain = normalizeDomain(websiteUrl);
+
+  if (!domain) {
+    return null;
+  }
+
+  const iconUrl = buildBrandfetchLogoUrl(domain);
+
+  if (!iconUrl) {
+    return null;
+  }
+
+  return {
+    brandId: null,
+    domain,
+    iconUrl,
+    name: null
+  } satisfies BrandfetchMatch;
+}
+
 export function buildBrandfetchLogoUrl(domain: string) {
   const { BRANDFETCH_CLIENT_ID } = getServerEnv();
   const normalizedDomain = normalizeDomain(domain);
@@ -73,7 +94,7 @@ export function buildBrandfetchLogoUrl(domain: string) {
   return `${BRANDFETCH_CDN_URL}/domain/${encodeURIComponent(normalizedDomain)}/w/128/h/128/fallback/404/type/icon?c=${encodeURIComponent(BRANDFETCH_CLIENT_ID)}`;
 }
 
-function normalizeDomain(domain: string | null | undefined) {
+export function normalizeDomain(domain: string | null | undefined) {
   if (!domain) {
     return null;
   }

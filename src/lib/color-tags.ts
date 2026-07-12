@@ -10,14 +10,7 @@ export type ColorTagToken =
 
 export type ThemeToken =
   | "alteraest-light"
-  | "alteraest-dark"
-  | "catppuccin-mocha"
-  | "catppuccin-latte"
-  | "tokyo-night"
-  | "gruvbox-dark"
-  | "dracula"
-  | "nord"
-  | "solarized-dark";
+  | "alteraest-dark";
 
 export type ColorTag = {
   token: ColorTagToken;
@@ -79,111 +72,6 @@ export const APP_THEMES: AppTheme[] = [
       blue: "#4C8DFF",
       purple: "#c6a0f6",
       pink: "#f5bde6"
-    }
-  },
-  {
-    token: "catppuccin-mocha",
-    label: "Catppuccin Mocha",
-    foreground: "#1e1e2e",
-    colors: {
-      red: "#f38ba8",
-      orange: "#fab387",
-      yellow: "#f9e2af",
-      green: "#a6e3a1",
-      teal: "#94e2d5",
-      blue: "#89b4fa",
-      purple: "#cba6f7",
-      pink: "#f5c2e7"
-    }
-  },
-  {
-    token: "catppuccin-latte",
-    label: "Catppuccin Latte",
-    foreground: "#eff1f5",
-    colors: {
-      red: "#d20f39",
-      orange: "#fe640b",
-      yellow: "#df8e1d",
-      green: "#40a02b",
-      teal: "#179299",
-      blue: "#1e66f5",
-      purple: "#8839ef",
-      pink: "#ea76cb"
-    }
-  },
-  {
-    token: "tokyo-night",
-    label: "Tokyo Night",
-    foreground: "#1a1b26",
-    colors: {
-      red: "#f7768e",
-      orange: "#ff9e64",
-      yellow: "#e0af68",
-      green: "#9ece6a",
-      teal: "#73daca",
-      blue: "#7aa2f7",
-      purple: "#bb9af7",
-      pink: "#ff007c"
-    }
-  },
-  {
-    token: "gruvbox-dark",
-    label: "Gruvbox Dark",
-    foreground: "#282828",
-    colors: {
-      red: "#fb4934",
-      orange: "#fe8019",
-      yellow: "#fabd2f",
-      green: "#b8bb26",
-      teal: "#8ec07c",
-      blue: "#83a598",
-      purple: "#d3869b",
-      pink: "#fb4934"
-    }
-  },
-  {
-    token: "dracula",
-    label: "Dracula",
-    foreground: "#282a36",
-    colors: {
-      red: "#ff5555",
-      orange: "#ffb86c",
-      yellow: "#f1fa8c",
-      green: "#50fa7b",
-      teal: "#8be9fd",
-      blue: "#6272a4",
-      purple: "#bd93f9",
-      pink: "#ff79c6"
-    }
-  },
-  {
-    token: "nord",
-    label: "Nord",
-    foreground: "#2e3440",
-    colors: {
-      red: "#bf616a",
-      orange: "#d08770",
-      yellow: "#ebcb8b",
-      green: "#a3be8c",
-      teal: "#8fbcbb",
-      blue: "#5e81ac",
-      purple: "#b48ead",
-      pink: "#bf616a"
-    }
-  },
-  {
-    token: "solarized-dark",
-    label: "Solarized Dark",
-    foreground: "#002b36",
-    colors: {
-      red: "#dc322f",
-      orange: "#cb4b16",
-      yellow: "#b58900",
-      green: "#859900",
-      teal: "#2aa198",
-      blue: "#268bd2",
-      purple: "#6c71c4",
-      pink: "#d33682"
     }
   }
 ];

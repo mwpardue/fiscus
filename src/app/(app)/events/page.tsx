@@ -72,6 +72,7 @@ export default async function EventsPage() {
   const iconByEventId = new Map(
     eventRows.map((event, index) => [event.id, icons[index]])
   );
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
@@ -154,6 +155,8 @@ export default async function EventsPage() {
                       </form>
                     )
                   : null;
+            const isOverdue =
+              event.lifecycle_status === "upcoming" && event.due_date < today;
 
             return (
               <SwipeableEventCard
@@ -191,12 +194,14 @@ export default async function EventsPage() {
                         <span className="rounded border border-line px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-gray-700">
                           {event.financial_items?.kind ?? "item"}
                         </span>
-                        <span className="rounded border border-line px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-gray-700">
-                          {event.lifecycle_status}
-                        </span>
+                        {isOverdue ? (
+                          <span className="rounded border border-danger/30 px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-danger">
+                            overdue
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-sm text-gray-700">
-                        <span>Due {event.due_date}</span>
+                        <span>Due {formatEventDate(event.due_date)}</span>
                         {account ? <span>{account.name}</span> : null}
                       </div>
                     </div>
@@ -238,4 +243,18 @@ function PencilIcon() {
       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
     </svg>
   );
+}
+
+function formatEventDate(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric"
+  }).format(parseDateOnly(date));
+}
+
+function parseDateOnly(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
 }

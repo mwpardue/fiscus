@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { BackLink } from "@/app/(app)/back-link";
 import { EntityIcon } from "@/app/(app)/entity-icon";
 import { ColorTagPicker } from "@/app/(app)/entries/color-tag-picker";
 import { DEFAULT_THEME_TOKEN } from "@/lib/color-tags";
@@ -110,6 +111,9 @@ export default async function EditEventPage({
     <main className="min-h-screen overflow-x-hidden px-3 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto grid w-full max-w-2xl gap-6">
         <header className="grid gap-3 border-b border-line pb-4">
+          <div>
+            <BackLink fallbackHref="/events" href={returnTo} />
+          </div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-mint">
               Edit event

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { BackLink } from "@/app/(app)/back-link";
 import { EntityIcon } from "@/app/(app)/entity-icon";
 import { resolveEntityIcons } from "@/lib/entity-icons";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -21,7 +22,7 @@ export default async function EditAccountPage({
 
   const { data: account } = await supabase
     .from("counterparties")
-    .select("id,name,icon_storage_path,brandfetch_icon_url")
+    .select("id,name,website_url,icon_storage_path,brandfetch_icon_url")
     .eq("id", id)
     .maybeSingle();
 
@@ -41,6 +42,9 @@ export default async function EditAccountPage({
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto grid max-w-2xl gap-6">
         <header className="grid gap-3 border-b border-line pb-4">
+          <div>
+            <BackLink fallbackHref="/accounts" />
+          </div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-mint">
               Edit account
@@ -68,6 +72,16 @@ export default async function EditAccountPage({
                 name="name"
                 defaultValue={account.name}
                 required
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-ink">
+              Website
+              <input
+                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                name="websiteUrl"
+                defaultValue={account.website_url ?? ""}
+                placeholder="att.com"
+                type="text"
               />
             </label>
             <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white">

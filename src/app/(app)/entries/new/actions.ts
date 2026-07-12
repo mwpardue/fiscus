@@ -20,6 +20,12 @@ const newEntrySchema = z
     categoryName: z.string().trim().max(80).optional(),
     colorToken: z.string().trim().optional(),
     counterpartyName: z.string().trim().max(120).optional(),
+    counterpartyWebsiteUrl: z
+      .string()
+      .trim()
+      .max(255)
+      .optional()
+      .transform((value) => normalizeWebsiteUrl(value)),
     returnTo: z.string().trim().optional(),
     amountStatus: z.enum(["fixed", "estimated", "unknown"]),
     expectedAmount: z.string().trim().optional(),
@@ -183,6 +189,7 @@ export async function createEntryAction(
     categoryName: formData.get("categoryName") || undefined,
     colorToken: formData.get("colorToken") || undefined,
     counterpartyName: formData.get("counterpartyName") || undefined,
+    counterpartyWebsiteUrl: formData.get("counterpartyWebsiteUrl") || undefined,
     returnTo: formData.get("returnTo") || undefined,
     amountStatus: formData.get("amountStatus"),
     expectedAmount: formData.get("expectedAmount") || undefined,
@@ -243,6 +250,7 @@ export async function createEntryAction(
     categoryName,
     colorToken,
     counterpartyName,
+    counterpartyWebsiteUrl,
     returnTo,
     amountStatus,
     expectedAmount,
@@ -290,6 +298,8 @@ export async function createEntryAction(
       : DEFAULT_COLOR_TAG_TOKEN,
     counterpartyId: accountMode === "existing" ? counterpartyId ?? null : undefined,
     counterpartyName: accountMode === "new" ? counterpartyName : undefined,
+    counterpartyWebsiteUrl:
+      accountMode === "new" ? counterpartyWebsiteUrl : undefined,
     planName: name,
     planIconFile: getOptionalFile(formData.get("planIcon")),
     themeToken: null
@@ -535,4 +545,17 @@ function getSafeReturnTo(returnTo: string | undefined): Route {
   }
 
   return "/events";
+}
+
+function normalizeWebsiteUrl(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value.startsWith("http") ? value : `https://${value}`);
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }

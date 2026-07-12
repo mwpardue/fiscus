@@ -7,7 +7,10 @@ import { ensureProfile } from "@/lib/profiles";
 import { enforceRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-const defaultAllowedSignupEmails = ["mpardue@alteraest.com"];
+const defaultAllowedSignupEmails = [
+  "mpardue@alteraest.com",
+  "test2@caracarn.anonaddy.com"
+];
 
 const signupSchema = z
   .object({

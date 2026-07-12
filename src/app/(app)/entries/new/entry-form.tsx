@@ -257,6 +257,18 @@ export function EntryForm({
             />
           </label>
           <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
+            Account website
+            <input
+              className="min-h-12 rounded border border-line bg-white px-3 text-base"
+              name="counterpartyWebsiteUrl"
+              placeholder="att.com"
+              type="text"
+            />
+            <span className="text-xs text-gray-700">
+              Helps match the right logo.
+            </span>
+          </label>
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             Account icon
             <input
               accept="image/png,image/jpeg,image/webp"
@@ -339,9 +351,9 @@ export function EntryForm({
         </span>
       </label>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <fieldset className="grid gap-3">
-          <legend className="text-sm font-semibold text-ink">Schedule</legend>
+      <fieldset className="grid gap-3">
+        <legend className="text-sm font-semibold text-ink">Schedule</legend>
+        <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
           <div className="grid gap-2">
             <label className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium">
               <input
@@ -377,26 +389,26 @@ export function EntryForm({
               Manual
             </label>
           </div>
-        </fieldset>
 
-        <label className="grid gap-2 text-sm font-medium text-ink">
-          Events
-          <input
-            className="min-h-12 rounded border border-line bg-white px-3 text-base disabled:bg-paper disabled:text-gray-600"
-            disabled={scheduleMode !== "finite"}
-            min={1}
-            max={120}
-            name="occurrenceCount"
-            type="number"
-            value={occurrenceCount}
-            onChange={(event) => setOccurrenceCount(event.target.value)}
-            required={scheduleMode === "finite"}
-          />
-        </label>
-      </div>
+          <label className="grid gap-2 text-sm font-medium text-ink">
+            Events
+            <input
+              className="min-h-12 rounded border border-line bg-white px-3 text-base disabled:bg-paper disabled:text-gray-600"
+              disabled={scheduleMode !== "finite"}
+              min={1}
+              max={120}
+              name="occurrenceCount"
+              type="number"
+              value={occurrenceCount}
+              onChange={(event) => setOccurrenceCount(event.target.value)}
+              required={scheduleMode === "finite"}
+            />
+          </label>
+        </div>
+      </fieldset>
 
       {scheduleMode !== "manual" ? (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-3 sm:items-start">
           <label className="grid gap-2 text-sm font-medium text-ink">
             Recurrence type
             <select

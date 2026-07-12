@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { lookupBrandfetchMatch } from "@/lib/brandfetch";
+import {
+  buildBrandfetchMatchFromWebsite,
+  lookupBrandfetchMatch
+} from "@/lib/brandfetch";
 import type { Database } from "@/lib/database.types";
 import { uploadEntityIcon } from "@/lib/entity-icons";
 
@@ -11,6 +14,7 @@ export type FinancialItemMetadataInput = {
   colorToken: string | null;
   counterpartyId?: string | null;
   counterpartyName?: string;
+  counterpartyWebsiteUrl?: string | null;
   planName: string;
   planIconFile?: File | null;
   themeToken?: string | null;
@@ -31,7 +35,8 @@ export async function applyFinancialItemMetadata(
         : await ensureCounterparty(
             supabase,
             userId,
-            metadata.counterpartyName
+            metadata.counterpartyName,
+            metadata.counterpartyWebsiteUrl
           );
   const accountIconPath = counterpartyId
     ? await uploadEntityIcon(supabase, {
@@ -67,6 +72,7 @@ export async function applyFinancialItemMetadata(
     await applyAccountBrandfetchMatch(supabase, {
       counterpartyId,
       query: metadata.counterpartyName,
+      websiteUrl: metadata.counterpartyWebsiteUrl,
       userId
     });
   }
@@ -113,14 +119,18 @@ export async function applyAccountBrandfetchMatch(
   {
     counterpartyId,
     query,
+    websiteUrl,
     userId
   }: {
     counterpartyId: string;
     query: string;
+    websiteUrl?: string | null;
     userId: string;
   }
 ) {
-  const brandfetchMatch = await lookupBrandfetchMatch(query);
+  const brandfetchMatch =
+    buildBrandfetchMatchFromWebsite(websiteUrl) ??
+    (await lookupBrandfetchMatch(query));
 
   if (!brandfetchMatch) {
     return;
@@ -183,7 +193,8 @@ export async function ensureCategory(
 export async function ensureCounterparty(
   supabase: BillingSupabaseClient,
   userId: string,
-  name: string | undefined
+  name: string | undefined,
+  websiteUrl?: string | null
 ) {
   if (!name) {
     return null;
@@ -201,12 +212,20 @@ export async function ensureCounterparty(
   }
 
   if (existingCounterparty) {
+    if (websiteUrl) {
+      await supabase
+        .from("counterparties")
+        .update({ website_url: websiteUrl })
+        .eq("id", existingCounterparty.id)
+        .eq("user_id", userId);
+    }
+
     return existingCounterparty.id;
   }
 
   const { data, error } = await supabase
     .from("counterparties")
-    .insert({ name, kind: "other", user_id: userId })
+    .insert({ name, kind: "other", user_id: userId, website_url: websiteUrl ?? null })
     .select("id")
     .single();
 

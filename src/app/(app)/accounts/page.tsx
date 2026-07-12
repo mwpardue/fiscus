@@ -17,7 +17,7 @@ export default async function AccountsPage() {
 
   const { data: accounts, error } = await supabase
     .from("counterparties")
-    .select("id,name,icon_storage_path,brandfetch_icon_url,updated_at")
+    .select("id,name,website_url,icon_storage_path,brandfetch_icon_url,updated_at")
     .order("name", { ascending: true });
   const icons = await resolveEntityIcons(
     supabase,
@@ -42,7 +42,7 @@ export default async function AccountsPage() {
 
         <form
           action={createAccountAction}
-          className="grid gap-3 rounded border border-line bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-end"
+          className="grid gap-3 rounded border border-line bg-white p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
         >
           <label className="grid gap-2 text-sm font-medium text-ink">
             Account name
@@ -54,6 +54,18 @@ export default async function AccountsPage() {
             />
             <span className="text-xs text-gray-700">
               The app will try to find a logo automatically and will use initials if none is found.
+            </span>
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-ink">
+            Website
+            <input
+              className="min-h-12 rounded border border-line bg-white px-3 text-base"
+              name="websiteUrl"
+              placeholder="att.com"
+              type="text"
+            />
+            <span className="text-xs text-gray-700">
+              Helps match the right logo.
             </span>
           </label>
           <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white">
@@ -86,7 +98,9 @@ export default async function AccountsPage() {
                   <div className="min-w-0">
                     <h2 className="font-semibold text-ink">{account.name}</h2>
                     <p className="text-sm text-gray-700">
-                      Updated {formatDate(account.updated_at)}
+                      {account.website_url
+                        ? formatWebsite(account.website_url)
+                        : `Updated ${formatDate(account.updated_at)}`}
                     </p>
                   </div>
                 </div>
@@ -109,6 +123,14 @@ export default async function AccountsPage() {
       </div>
     </main>
   );
+}
+
+function formatWebsite(websiteUrl: string) {
+  try {
+    return new URL(websiteUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return websiteUrl;
+  }
 }
 
 function formatDate(timestamp: string) {

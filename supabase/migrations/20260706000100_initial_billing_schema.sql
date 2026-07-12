@@ -67,14 +67,7 @@ create table public.profiles (
   constraint profiles_theme_token_valid check (
     theme_token in (
       'alteraest-light',
-      'alteraest-dark',
-      'catppuccin-mocha',
-      'catppuccin-latte',
-      'tokyo-night',
-      'gruvbox-dark',
-      'dracula',
-      'nord',
-      'solarized-dark'
+      'alteraest-dark'
     )
   )
 );
@@ -84,10 +77,14 @@ create table public.counterparties (
   user_id uuid not null references auth.users (id) on delete cascade,
   name text not null,
   kind public.counterparty_kind not null default 'other',
+  website_url text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint counterparties_name_not_blank check (btrim(name) <> ''),
+  constraint counterparties_website_url_valid check (
+    website_url is null or website_url ~ '^https?://[^[:space:]]+$'
+  ),
   constraint counterparties_id_user_id_unique unique (id, user_id)
 );
 
