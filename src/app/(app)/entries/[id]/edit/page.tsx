@@ -258,19 +258,28 @@ export default async function EditEntryPage({
                 </p>
               </div>
               <div className="grid gap-2">
-                {(occurrences ?? []).map((occurrence, index) => (
+                {(occurrences ?? []).map((occurrence) => (
                   <label
-                    className="grid gap-2 rounded border border-line bg-white p-3 text-sm font-medium text-ink sm:grid-cols-[auto_1fr_auto] sm:items-center"
+                    className="grid gap-2 rounded border border-line bg-white p-3 text-sm font-medium text-ink sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                     key={occurrence.id}
                   >
-                    <span>#{index + 1}</span>
-                    <span>
-                      {occurrence.amount_status === "unknown"
-                        ? "Unknown"
-                        : formatMinorAmountForInput(
-                            occurrence.expected_amount_minor ?? 0
-                          )}{" "}
-                      {occurrence.currency_code}
+                    <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                      <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
+                        {formatWeekday(occurrence.due_date)}
+                      </span>
+                      <span className="grid min-w-0 gap-0.5">
+                        <span className="font-semibold">
+                          {formatDisplayDate(occurrence.due_date)}
+                        </span>
+                        <span className="text-xs text-gray-700">
+                          {occurrence.amount_status === "unknown"
+                            ? "Unknown"
+                            : formatMinorAmountForInput(
+                                occurrence.expected_amount_minor ?? 0
+                              )}{" "}
+                          {occurrence.currency_code}
+                        </span>
+                      </span>
                     </span>
                     <input
                       name={`occurrenceDueDate:${occurrence.id}`}
@@ -292,4 +301,25 @@ export default async function EditEntryPage({
       </div>
     </main>
   );
+}
+
+function formatDisplayDate(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+    year: "numeric"
+  }).format(parseDateOnly(date));
+}
+
+function formatWeekday(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short"
+  }).format(parseDateOnly(date));
+}
+
+function parseDateOnly(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
 }

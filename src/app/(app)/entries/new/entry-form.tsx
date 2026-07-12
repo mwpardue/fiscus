@@ -837,13 +837,15 @@ export function EntryForm({
             <p className="text-sm text-gray-700">{scheduleDescription}</p>
             {previewDates.length > 0 ? (
               <ol className="grid max-h-56 gap-2 overflow-auto text-sm text-ink sm:grid-cols-2">
-                {previewDates.map((date, index) => (
+                {previewDates.map((date) => (
                   <li
-                    className="flex items-center justify-between rounded border border-line bg-white px-3 py-2"
-                    key={`${date}-${index}`}
+                    className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded border border-line bg-white px-3 py-2"
+                    key={date}
                   >
-                    <span>#{index + 1}</span>
-                    <span className="font-semibold">{date}</span>
+                    <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
+                      {formatWeekday(date)}
+                    </span>
+                    <span className="font-semibold">{formatDisplayDate(date)}</span>
                   </li>
                 ))}
               </ol>
@@ -935,6 +937,27 @@ function getSafeCancelHref(returnTo: string | undefined): Route {
   }
 
   return "/events";
+}
+
+function formatDisplayDate(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+    year: "numeric"
+  }).format(parseDateOnly(date));
+}
+
+function formatWeekday(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short"
+  }).format(parseDateOnly(date));
+}
+
+function parseDateOnly(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
 function getTomorrow() {

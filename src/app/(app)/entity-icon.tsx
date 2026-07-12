@@ -5,12 +5,14 @@ export function EntityIcon({
   size = "md"
 }: {
   icon: ResolvedEntityIcon;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }) {
   const className =
     size === "sm"
       ? "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-paper text-sm font-semibold text-ink"
-      : "flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-paper text-base font-semibold text-ink";
+      : size === "lg"
+        ? "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-paper text-base font-semibold text-ink"
+        : "flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-paper text-base font-semibold text-ink";
 
   if (icon.signedUrl) {
     return (

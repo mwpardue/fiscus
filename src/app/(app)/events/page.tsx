@@ -184,9 +184,16 @@ export default async function EventsPage() {
                   >
                     <PencilIcon />
                   </Link>
-                  <div className="flex min-w-0 gap-2">
-                    <EntityIcon icon={icon} size="sm" />
-                    <div className="grid min-w-0 gap-1">
+                  <div className="flex min-w-0 gap-3">
+                    <EntityIcon icon={icon} size="lg" />
+                    <div className="grid min-w-0 content-center gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-gray-700">
+                        <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
+                          {formatWeekday(event.due_date)}
+                        </span>
+                        <span>{formatEventDate(event.due_date)}</span>
+                        {account ? <span>- {account.name}</span> : null}
+                      </div>
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         <h2 className="truncate font-semibold text-ink">
                           {event.financial_items?.name ?? "Untitled"}
@@ -199,10 +206,6 @@ export default async function EventsPage() {
                             overdue
                           </span>
                         ) : null}
-                      </div>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-sm text-gray-700">
-                        <span>Due {formatEventDate(event.due_date)}</span>
-                        {account ? <span>{account.name}</span> : null}
                       </div>
                     </div>
                   </div>
@@ -251,6 +254,13 @@ function formatEventDate(date: string) {
     month: "long",
     timeZone: "UTC",
     year: "numeric"
+  }).format(parseDateOnly(date));
+}
+
+function formatWeekday(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short"
   }).format(parseDateOnly(date));
 }
 

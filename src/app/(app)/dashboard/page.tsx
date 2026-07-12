@@ -105,7 +105,7 @@ export default async function DashboardPage({
       : Promise.resolve({ data: [] as DashboardPayment[] }),
     supabase
       .from("counterparties")
-      .select("id,icon_storage_path,brandfetch_icon_url")
+      .select("id,name,icon_storage_path,brandfetch_icon_url")
       .eq("user_id", user.id)
   ]);
 
@@ -113,12 +113,13 @@ export default async function DashboardPage({
   const visibleOccurrenceRows = selectedDay
     ? calendarOccurrenceRows.filter((occurrence) => occurrence.due_date === selectedDay)
     : calendarOccurrenceRows;
-  const accountIconById = new Map(
+  const accountById = new Map(
     (counterparties ?? []).map((counterparty) => [
       counterparty.id,
       {
         brandfetchIconUrl: counterparty.brandfetch_icon_url,
-        iconPath: counterparty.icon_storage_path
+        iconPath: counterparty.icon_storage_path,
+        name: counterparty.name
       }
     ])
   );
@@ -126,11 +127,11 @@ export default async function DashboardPage({
     supabase,
     calendarOccurrenceRows.map((occurrence) => ({
       accountBrandfetchIconUrl: occurrence.financial_items?.counterparty_id
-        ? accountIconById.get(occurrence.financial_items.counterparty_id)
+        ? accountById.get(occurrence.financial_items.counterparty_id)
             ?.brandfetchIconUrl ?? null
         : null,
       accountIconPath: occurrence.financial_items?.counterparty_id
-        ? accountIconById.get(occurrence.financial_items.counterparty_id)
+        ? accountById.get(occurrence.financial_items.counterparty_id)
             ?.iconPath ?? null
         : null,
       planBrandfetchIconUrl: occurrence.financial_items?.brandfetch_icon_url ?? null,
@@ -311,6 +312,9 @@ export default async function DashboardPage({
                           occurrence.expected_amount_minor ?? 0,
                           occurrence.currency_code
                         );
+                  const account = occurrence.financial_items?.counterparty_id
+                    ? accountById.get(occurrence.financial_items.counterparty_id)
+                    : null;
                   const returnTo = buildDashboardHref(
                     selectedMonth,
                     selectedDay ?? undefined
@@ -369,9 +373,16 @@ export default async function DashboardPage({
                         >
                           <PencilIcon />
                         </Link>
-                        <div className="flex min-w-0 gap-2">
-                          <EntityIcon icon={icon} size="sm" />
-                          <div className="grid min-w-0 gap-1">
+                        <div className="flex min-w-0 gap-3">
+                          <EntityIcon icon={icon} size="lg" />
+                          <div className="grid min-w-0 content-center gap-2">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-gray-700">
+                              <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
+                                {formatWeekday(occurrence.due_date)}
+                              </span>
+                              <span>{formatEventDate(occurrence.due_date)}</span>
+                              {account ? <span>- {account.name}</span> : null}
+                            </div>
                             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                               <h3 className="truncate font-semibold text-ink">
                                 {occurrence.financial_items?.name ?? "Untitled"}
@@ -384,10 +395,6 @@ export default async function DashboardPage({
                                   overdue
                                 </span>
                               ) : null}
-                            </div>
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-sm text-gray-700">
-                              <span>Due {formatEventDate(occurrence.due_date)}</span>
-                              <span>{occurrence.amount_status}</span>
                             </div>
                           </div>
                         </div>
@@ -615,6 +622,13 @@ function formatEventDate(date: string) {
     month: "long",
     timeZone: "UTC",
     year: "numeric"
+  }).format(parseDateOnly(date));
+}
+
+function formatWeekday(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short"
   }).format(parseDateOnly(date));
 }
 
