@@ -84,6 +84,20 @@ export default async function EditAccountPage({
                 type="text"
               />
             </label>
+            <details className="grid gap-3 text-sm text-ink">
+              <summary className="w-fit cursor-pointer rounded border border-line bg-white px-3 py-2 text-sm font-semibold">
+                Icon options
+              </summary>
+              <label className="mt-3 grid min-w-0 gap-2 rounded border border-line bg-paper p-3 text-sm font-medium text-ink">
+                Account icon
+                <input
+                  accept="image/png,image/jpeg,image/webp"
+                  className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
+                  name="accountIcon"
+                  type="file"
+                />
+              </label>
+            </details>
             <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white">
               Save account
             </button>

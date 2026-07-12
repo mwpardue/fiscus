@@ -85,15 +85,20 @@ export function EventAccountSelector({
               type="text"
             />
           </label>
-          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink sm:col-span-2">
-            Account icon
-            <input
-              accept="image/png,image/jpeg,image/webp"
-              className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
-              name="accountIcon"
-              type="file"
-            />
-          </label>
+          <details className="grid gap-3 text-sm text-ink sm:col-span-2">
+            <summary className="w-fit cursor-pointer rounded border border-line bg-white px-3 py-2 text-sm font-semibold">
+              Icon options
+            </summary>
+            <label className="mt-3 grid min-w-0 gap-2 rounded border border-line bg-paper p-3 text-sm font-medium text-ink">
+              Account icon
+              <input
+                accept="image/png,image/jpeg,image/webp"
+                className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
+                name="accountIcon"
+                type="file"
+              />
+            </label>
+          </details>
         </div>
       ) : null}
     </>

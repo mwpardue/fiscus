@@ -47,6 +47,9 @@ const newEntrySchema = z
     weekdays: z.array(z.coerce.number().int().min(0).max(6)).optional(),
     ordinalWeek: z.coerce.number().int().refine((value) => value === -1 || (value >= 1 && value <= 4)).optional(),
     shortMonthBehavior: z.enum(["last_day", "next_month", "skip"]),
+    businessDayAdjustment: z
+      .enum(["none", "previous_business_day", "next_business_day"])
+      .default("none"),
     currencyCode: z
       .string()
       .trim()
@@ -222,6 +225,7 @@ export async function createEntryAction(
       .filter(Boolean),
     ordinalWeek: formData.get("ordinalWeek") || undefined,
     shortMonthBehavior: formData.get("shortMonthBehavior"),
+    businessDayAdjustment: formData.get("businessDayAdjustment") ?? "none",
     currencyCode: formData.get("currencyCode")
   });
 
@@ -272,6 +276,7 @@ export async function createEntryAction(
     weekdays,
     ordinalWeek,
     shortMonthBehavior,
+    businessDayAdjustment,
     currencyCode
   } = parsed.data;
   const expectedAmountMinor =
@@ -387,6 +392,7 @@ export async function createEntryAction(
   const primaryWeekday = activeWeekdays[0] ?? weekday ?? null;
   const dueDates = generateDueDates({
     anchorDate: generatedAnchorDate,
+    businessDayAdjustment,
     count: generatedCount,
     intervalCount,
     intervalUnit,
@@ -431,7 +437,8 @@ export async function createEntryAction(
     p_schedule_basis: scheduleBasis,
     p_anchor_weekday: scheduleBasis === "date" ? null : primaryWeekday,
     p_ordinal_week:
-      scheduleBasis === "month_weekday" ? ordinalWeek ?? null : null
+      scheduleBasis === "month_weekday" ? ordinalWeek ?? null : null,
+    p_business_day_adjustment: businessDayAdjustment
   });
 
   if (error) {
@@ -451,6 +458,7 @@ export async function createEntryAction(
     for (const extraWeekday of activeWeekdays.slice(1)) {
       const extraDueDates = generateDueDates({
         anchorDate: generatedAnchorDate,
+        businessDayAdjustment,
         count: generatedCount,
         intervalCount,
         intervalUnit,
@@ -475,7 +483,8 @@ export async function createEntryAction(
           p_due_dates: extraDueDates,
           p_schedule_basis: scheduleBasis,
           p_anchor_weekday: extraWeekday,
-          p_ordinal_week: null
+          p_ordinal_week: null,
+          p_business_day_adjustment: businessDayAdjustment
         }
       );
 

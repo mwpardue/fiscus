@@ -162,32 +162,34 @@ export default async function EditEntryPage({
             </label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-medium text-ink">
-              Account icon
-              <input
-                accept="image/png,image/jpeg,image/webp"
-                className="min-h-12 rounded border border-line bg-white px-3 py-2 text-base"
-                name="accountIcon"
-                type="file"
-              />
-              <span className="text-xs text-gray-700">
-                If no image is uploaded, the app will try to find a logo and then use initials.
-              </span>
-            </label>
-            <label className="grid gap-2 text-sm font-medium text-ink">
-              Plan icon override
-              <input
-                accept="image/png,image/jpeg,image/webp"
-                className="min-h-12 rounded border border-line bg-white px-3 py-2 text-base"
-                name="planIcon"
-                type="file"
-              />
-              <span className="text-xs text-gray-700">
-                Leave blank to inherit the account icon.
-              </span>
-            </label>
-          </div>
+          <details className="grid gap-3 text-sm text-ink">
+            <summary className="w-fit cursor-pointer rounded border border-line bg-white px-3 py-2 text-sm font-semibold">
+              Icon options
+            </summary>
+            <div className="mt-3 grid gap-4 rounded border border-line bg-paper p-3 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-medium text-ink">
+                Account icon
+                <input
+                  accept="image/png,image/jpeg,image/webp"
+                  className="min-h-12 rounded border border-line bg-white px-3 py-2 text-base"
+                  name="accountIcon"
+                  type="file"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium text-ink">
+                Plan icon override
+                <input
+                  accept="image/png,image/jpeg,image/webp"
+                  className="min-h-12 rounded border border-line bg-white px-3 py-2 text-base"
+                  name="planIcon"
+                  type="file"
+                />
+                <span className="text-xs text-gray-700">
+                  Leave blank to inherit the account icon.
+                </span>
+              </label>
+            </div>
+          </details>
 
           <fieldset className="grid gap-3">
             <legend className="text-sm font-semibold text-ink">Amount</legend>

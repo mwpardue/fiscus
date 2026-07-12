@@ -61,6 +61,28 @@ describe("generateDueDates", () => {
     ).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"]);
   });
 
+  it("moves weekend dates to the previous business day", () => {
+    expect(
+      generateDueDates({
+        anchorDate: "2026-07-10",
+        businessDayAdjustment: "previous_business_day",
+        count: 4,
+        intervalUnit: "day"
+      })
+    ).toEqual(["2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15"]);
+  });
+
+  it("moves observed federal holidays to the next business day", () => {
+    expect(
+      generateDueDates({
+        anchorDate: "2026-07-04",
+        businessDayAdjustment: "next_business_day",
+        count: 1,
+        intervalUnit: "year"
+      })
+    ).toEqual(["2026-07-06"]);
+  });
+
   it("generates yearly dates with short-year behavior", () => {
     expect(
       generateDueDates({

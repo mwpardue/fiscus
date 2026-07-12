@@ -386,8 +386,7 @@ export default async function DashboardPage({
                               ) : null}
                             </div>
                             <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-sm text-gray-700">
-                              <span>Due {occurrence.due_date}</span>
-                              <span>{occurrence.lifecycle_status}</span>
+                              <span>Due {formatEventDate(occurrence.due_date)}</span>
                               <span>{occurrence.amount_status}</span>
                             </div>
                           </div>
@@ -607,6 +606,15 @@ function formatShortDate(date: string) {
     day: "numeric",
     month: "short",
     timeZone: "UTC"
+  }).format(parseDateOnly(date));
+}
+
+function formatEventDate(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+    year: "numeric"
   }).format(parseDateOnly(date));
 }
 

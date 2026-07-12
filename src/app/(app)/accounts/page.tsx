@@ -42,33 +42,46 @@ export default async function AccountsPage() {
 
         <form
           action={createAccountAction}
-          className="grid gap-3 rounded border border-line bg-white p-4 sm:grid-cols-2"
+          className="grid gap-4 rounded border border-line bg-white p-4"
         >
-          <label className="grid gap-2 text-sm font-medium text-ink">
-            Account name
-            <input
-              className="min-h-12 rounded border border-line bg-white px-3 text-base"
-              name="name"
-              placeholder="Amazon, Duke Energy, employer"
-              required
-            />
-            <span className="text-xs text-gray-700">
-              The app will try to find a logo automatically and will use initials if none is found.
-            </span>
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-ink">
-            Website
-            <input
-              className="min-h-12 rounded border border-line bg-white px-3 text-base"
-              name="websiteUrl"
-              placeholder="att.com"
-              type="text"
-            />
-            <span className="text-xs text-gray-700">
-              Helps match the right logo.
-            </span>
-          </label>
-          <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white sm:col-span-2 sm:justify-self-start">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid min-w-0 content-start gap-2 text-sm font-medium text-ink">
+              Account name
+              <input
+                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                name="name"
+                placeholder="Amazon, Duke Energy, employer"
+                required
+              />
+            </label>
+            <label className="grid min-w-0 content-start gap-2 text-sm font-medium text-ink">
+              Website
+              <input
+                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                name="websiteUrl"
+                placeholder="att.com"
+                type="text"
+              />
+            </label>
+            <p className="text-xs text-gray-700 sm:col-span-2">
+              The app will try to find a logo automatically and will use initials if none is found. Website helps match the right logo.
+            </p>
+          </div>
+          <details className="grid gap-3 text-sm text-ink">
+            <summary className="w-fit cursor-pointer rounded border border-line bg-white px-3 py-2 text-sm font-semibold">
+              Icon options
+            </summary>
+            <label className="mt-3 grid min-w-0 gap-2 rounded border border-line bg-paper p-3 text-sm font-medium text-ink">
+              Account icon
+              <input
+                accept="image/png,image/jpeg,image/webp"
+                className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
+                name="accountIcon"
+                type="file"
+              />
+            </label>
+          </details>
+          <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white sm:justify-self-start">
             Add account
           </button>
         </form>

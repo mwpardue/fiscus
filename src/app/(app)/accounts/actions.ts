@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { applyAccountBrandfetchMatch } from "@/lib/financial-item-metadata";
+import { uploadEntityIcon } from "@/lib/entity-icons";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -53,6 +54,12 @@ export async function createAccountAction(formData: FormData) {
   const accountId = existingAccount
     ? existingAccount.id
     : await insertAccount(supabase, user.id, parsed.data.name, parsed.data.websiteUrl);
+  const accountIconPath = await uploadAccountIcon(
+    supabase,
+    user.id,
+    accountId,
+    getOptionalFile(formData.get("accountIcon"))
+  );
 
   if (existingAccount) {
     const { error: updateError } = await supabase
@@ -66,12 +73,14 @@ export async function createAccountAction(formData: FormData) {
     }
   }
 
-  await applyAccountBrandfetchMatch(supabase, {
-    counterpartyId: accountId,
-    query: parsed.data.name,
-    websiteUrl: parsed.data.websiteUrl,
-    userId: user.id
-  });
+  if (!accountIconPath) {
+    await applyAccountBrandfetchMatch(supabase, {
+      counterpartyId: accountId,
+      query: parsed.data.name,
+      websiteUrl: parsed.data.websiteUrl,
+      userId: user.id
+    });
+  }
 
   revalidatePath("/accounts");
   revalidatePath("/entries");
@@ -112,12 +121,21 @@ export async function updateAccountAction(formData: FormData) {
     throw new Error("Unable to update that account.");
   }
 
-  await applyAccountBrandfetchMatch(supabase, {
-    counterpartyId: parsed.data.id,
-    query: parsed.data.name,
-    websiteUrl: parsed.data.websiteUrl,
-    userId: user.id
-  });
+  const accountIconPath = await uploadAccountIcon(
+    supabase,
+    user.id,
+    parsed.data.id,
+    getOptionalFile(formData.get("accountIcon"))
+  );
+
+  if (!accountIconPath) {
+    await applyAccountBrandfetchMatch(supabase, {
+      counterpartyId: parsed.data.id,
+      query: parsed.data.name,
+      websiteUrl: parsed.data.websiteUrl,
+      userId: user.id
+    });
+  }
 
   revalidatePath("/accounts");
   revalidatePath(`/accounts/${parsed.data.id}/edit`);
@@ -144,6 +162,43 @@ async function insertAccount(
   }
 
   return data.id;
+}
+
+async function uploadAccountIcon(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  userId: string,
+  accountId: string,
+  file: File | null
+) {
+  const iconPath = await uploadEntityIcon(supabase, {
+    entityId: accountId,
+    file,
+    kind: "account",
+    userId
+  });
+
+  if (!iconPath) {
+    return null;
+  }
+
+  const { error } = await supabase
+    .from("counterparties")
+    .update({
+      icon_storage_path: iconPath,
+      icon_updated_at: new Date().toISOString()
+    })
+    .eq("id", accountId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error("Unable to update account icon.");
+  }
+
+  return iconPath;
+}
+
+function getOptionalFile(value: FormDataEntryValue | null) {
+  return value instanceof File ? value : null;
 }
 
 function normalizeWebsiteUrl(value: string | undefined) {

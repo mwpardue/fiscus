@@ -1,4 +1,9 @@
-import type { IntervalUnit, ScheduleMode, ShortMonthBehavior } from "./types";
+import type {
+  BusinessDayAdjustment,
+  IntervalUnit,
+  ScheduleMode,
+  ShortMonthBehavior
+} from "./types";
 
 export type ScheduleBasis = "date" | "weekday" | "month_weekday";
 
@@ -8,6 +13,7 @@ export type GeneratedDueDateInput = {
   intervalCount?: number;
   intervalUnit: Extract<IntervalUnit, "day" | "week" | "month" | "year">;
   ordinalWeek?: number | null;
+  businessDayAdjustment?: BusinessDayAdjustment;
   scheduleBasis?: ScheduleBasis;
   shortMonthBehavior?: ShortMonthBehavior;
   weekday?: number | null;
@@ -25,6 +31,7 @@ export function generateDueDates({
   intervalCount = 1,
   intervalUnit,
   ordinalWeek = null,
+  businessDayAdjustment = "none",
   scheduleBasis = "date",
   shortMonthBehavior = "last_day",
   weekday = null
@@ -41,9 +48,12 @@ export function generateDueDates({
     }
 
     const firstDate = firstWeekdayOnOrAfter(anchor.date, weekday);
-    return Array.from({ length: count }, (_, index) =>
-      formatDateOnly(addDays(firstDate, index * intervalCount * 7))
-    );
+    return generateDayIntervalDates({
+      businessDayAdjustment,
+      count,
+      intervalDays: intervalCount * 7,
+      startDate: firstDate
+    });
   }
 
   if (scheduleBasis === "month_weekday") {
@@ -57,6 +67,7 @@ export function generateDueDates({
 
     return generateMonthlyWeekdayDates({
       anchorDate: anchor.date,
+      businessDayAdjustment,
       count,
       intervalCount,
       ordinalWeek,
@@ -65,20 +76,27 @@ export function generateDueDates({
   }
 
   if (intervalUnit === "day") {
-    return Array.from({ length: count }, (_, index) =>
-      formatDateOnly(addDays(anchor.date, index * intervalCount))
-    );
+    return generateDayIntervalDates({
+      businessDayAdjustment,
+      count,
+      intervalDays: intervalCount,
+      startDate: anchor.date
+    });
   }
 
   if (intervalUnit === "week") {
-    return Array.from({ length: count }, (_, index) =>
-      formatDateOnly(addDays(anchor.date, index * intervalCount * 7))
-    );
+    return generateDayIntervalDates({
+      businessDayAdjustment,
+      count,
+      intervalDays: intervalCount * 7,
+      startDate: anchor.date
+    });
   }
 
   if (intervalUnit === "year") {
     return generateYearlyDates({
       anchorDate: anchor.date,
+      businessDayAdjustment,
       count,
       intervalCount,
       shortMonthBehavior
@@ -98,7 +116,7 @@ export function generateDueDates({
     );
 
     if (candidate) {
-      dates.push(formatDateOnly(candidate));
+      pushAdjustedDate(dates, candidate, businessDayAdjustment);
     }
 
     offset += 1;
@@ -206,11 +224,13 @@ function resolveMonthlyDate(
 
 function generateYearlyDates({
   anchorDate,
+  businessDayAdjustment,
   count,
   intervalCount,
   shortMonthBehavior
 }: {
   anchorDate: Date;
+  businessDayAdjustment: BusinessDayAdjustment;
   count: number;
   intervalCount: number;
   shortMonthBehavior: ShortMonthBehavior;
@@ -230,7 +250,7 @@ function generateYearlyDates({
     );
 
     if (candidate) {
-      dates.push(formatDateOnly(candidate));
+      pushAdjustedDate(dates, candidate, businessDayAdjustment);
     }
 
     offset += 1;
@@ -264,12 +284,14 @@ function resolveYearlyDate(
 
 function generateMonthlyWeekdayDates({
   anchorDate,
+  businessDayAdjustment,
   count,
   intervalCount,
   ordinalWeek,
   weekday
 }: {
   anchorDate: Date;
+  businessDayAdjustment: BusinessDayAdjustment;
   count: number;
   intervalCount: number;
   ordinalWeek: number;
@@ -289,7 +311,7 @@ function generateMonthlyWeekdayDates({
     const candidate = weekdayOfMonth(candidateMonth, ordinalWeek, weekday);
 
     if (candidate >= anchorDate) {
-      dates.push(formatDateOnly(candidate));
+      pushAdjustedDate(dates, candidate, businessDayAdjustment);
     }
 
     monthOffset += intervalCount;
@@ -316,6 +338,121 @@ function weekdayOfMonth(monthDate: Date, ordinalWeek: number, weekday: number) {
 
 function firstWeekdayOnOrAfter(date: Date, weekday: number) {
   return addDays(date, (weekday - date.getUTCDay() + 7) % 7);
+}
+
+function generateDayIntervalDates({
+  businessDayAdjustment,
+  count,
+  intervalDays,
+  startDate
+}: {
+  businessDayAdjustment: BusinessDayAdjustment;
+  count: number;
+  intervalDays: number;
+  startDate: Date;
+}) {
+  const dates: string[] = [];
+  let offset = 0;
+
+  while (dates.length < count) {
+    const candidate = addDays(startDate, offset * intervalDays);
+    pushAdjustedDate(dates, candidate, businessDayAdjustment);
+    offset += 1;
+  }
+
+  return dates;
+}
+
+function pushAdjustedDate(
+  dates: string[],
+  candidate: Date,
+  businessDayAdjustment: BusinessDayAdjustment
+) {
+  const adjustedDate = formatDateOnly(
+    adjustBusinessDay(candidate, businessDayAdjustment)
+  );
+
+  if (!dates.includes(adjustedDate)) {
+    dates.push(adjustedDate);
+  }
+}
+
+function adjustBusinessDay(date: Date, businessDayAdjustment: BusinessDayAdjustment) {
+  if (businessDayAdjustment === "none") {
+    return date;
+  }
+
+  const step = businessDayAdjustment === "previous_business_day" ? -1 : 1;
+  let adjustedDate = date;
+
+  while (isWeekend(adjustedDate) || isObservedFederalHoliday(adjustedDate)) {
+    adjustedDate = addDays(adjustedDate, step);
+  }
+
+  return adjustedDate;
+}
+
+function isWeekend(date: Date) {
+  return date.getUTCDay() === 0 || date.getUTCDay() === 6;
+}
+
+function isObservedFederalHoliday(date: Date) {
+  const year = date.getUTCFullYear();
+  const dateOnly = formatDateOnly(date);
+  return (
+    federalHolidaysForYear(year).has(dateOnly) ||
+    federalHolidaysForYear(year + 1).has(dateOnly)
+  );
+}
+
+function federalHolidaysForYear(year: number) {
+  const holidays = new Set<string>();
+  const addObservedFixed = (month: number, day: number) => {
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (date.getUTCDay() === 6) {
+      holidays.add(formatDateOnly(addDays(date, -1)));
+      return;
+    }
+
+    if (date.getUTCDay() === 0) {
+      holidays.add(formatDateOnly(addDays(date, 1)));
+      return;
+    }
+
+    holidays.add(formatDateOnly(date));
+  };
+
+  addObservedFixed(1, 1);
+  holidays.add(formatDateOnly(nthWeekdayOfMonth(year, 1, 1, 3)));
+  holidays.add(formatDateOnly(nthWeekdayOfMonth(year, 2, 1, 3)));
+  holidays.add(formatDateOnly(lastWeekdayOfMonth(year, 5, 1)));
+  addObservedFixed(6, 19);
+  addObservedFixed(7, 4);
+  holidays.add(formatDateOnly(nthWeekdayOfMonth(year, 9, 1, 1)));
+  holidays.add(formatDateOnly(nthWeekdayOfMonth(year, 10, 1, 2)));
+  addObservedFixed(11, 11);
+  holidays.add(formatDateOnly(nthWeekdayOfMonth(year, 11, 4, 4)));
+  addObservedFixed(12, 25);
+
+  return holidays;
+}
+
+function nthWeekdayOfMonth(
+  year: number,
+  month: number,
+  weekday: number,
+  ordinalWeek: number
+) {
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const daysForward = (weekday - firstDay.getUTCDay() + 7) % 7;
+  return addDays(firstDay, daysForward + (ordinalWeek - 1) * 7);
+}
+
+function lastWeekdayOfMonth(year: number, month: number, weekday: number) {
+  const lastDay = new Date(Date.UTC(year, month, 0));
+  const daysBack = (lastDay.getUTCDay() - weekday + 7) % 7;
+  return addDays(lastDay, -daysBack);
 }
 
 function addDays(date: Date, days: number) {

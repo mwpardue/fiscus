@@ -247,8 +247,8 @@ function PencilIcon() {
 
 function formatEventDate(date: string) {
   return new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "short",
+    day: "numeric",
+    month: "long",
     timeZone: "UTC",
     year: "numeric"
   }).format(parseDateOnly(date));

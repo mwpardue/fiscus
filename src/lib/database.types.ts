@@ -282,6 +282,10 @@ export type Database = {
           anchor_date: string | null;
           anchor_day: number | null;
           anchor_weekday: number | null;
+          business_day_adjustment:
+            | "none"
+            | "previous_business_day"
+            | "next_business_day";
           converted_from_rule_id: string | null;
           created_at: string;
           ends_on: string | null;
@@ -302,6 +306,10 @@ export type Database = {
           anchor_date?: string | null;
           anchor_day?: number | null;
           anchor_weekday?: number | null;
+          business_day_adjustment?:
+            | "none"
+            | "previous_business_day"
+            | "next_business_day";
           converted_from_rule_id?: string | null;
           created_at?: string;
           ends_on?: string | null;
@@ -329,6 +337,10 @@ export type Database = {
           p_anchor_date: string;
           p_anchor_day: number | null;
           p_anchor_weekday?: number | null;
+          p_business_day_adjustment?:
+            | "none"
+            | "previous_business_day"
+            | "next_business_day";
           p_due_dates: string[];
           p_financial_item_id: string;
           p_interval_count: number;
@@ -354,6 +366,10 @@ export type Database = {
           p_interval_count: number;
           p_interval_unit: Database["public"]["Enums"]["interval_unit"];
           p_anchor_weekday?: number | null;
+          p_business_day_adjustment?:
+            | "none"
+            | "previous_business_day"
+            | "next_business_day";
           p_kind: Database["public"]["Enums"]["financial_item_kind"];
           p_mode: Database["public"]["Enums"]["schedule_mode"];
           p_name: string;
