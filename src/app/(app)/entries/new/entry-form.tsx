@@ -268,7 +268,7 @@ export function EntryForm({
               Helps match the right logo.
             </span>
           </label>
-          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink sm:col-span-2">
             Account icon
             <input
               accept="image/png,image/jpeg,image/webp"

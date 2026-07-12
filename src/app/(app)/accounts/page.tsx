@@ -42,7 +42,7 @@ export default async function AccountsPage() {
 
         <form
           action={createAccountAction}
-          className="grid gap-3 rounded border border-line bg-white p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+          className="grid gap-3 rounded border border-line bg-white p-4 sm:grid-cols-2"
         >
           <label className="grid gap-2 text-sm font-medium text-ink">
             Account name
@@ -68,7 +68,7 @@ export default async function AccountsPage() {
               Helps match the right logo.
             </span>
           </label>
-          <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white">
+          <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white sm:col-span-2 sm:justify-self-start">
             Add account
           </button>
         </form>

@@ -10,6 +10,7 @@ type BillingSupabaseClient = SupabaseClient<Database>;
 
 export type FinancialItemMetadataInput = {
   accountIconFile?: File | null;
+  categoryId?: string | null;
   categoryName?: string;
   colorToken: string | null;
   counterpartyId?: string | null;
@@ -26,7 +27,10 @@ export async function applyFinancialItemMetadata(
   financialItemId: string,
   metadata: FinancialItemMetadataInput
 ) {
-  const categoryId = await ensureCategory(supabase, userId, metadata.categoryName);
+  const categoryId =
+    metadata.categoryId !== undefined
+      ? metadata.categoryId
+      : await ensureCategory(supabase, userId, metadata.categoryName);
   const counterpartyId =
     metadata.counterpartyId === null
       ? null
@@ -213,11 +217,15 @@ export async function ensureCounterparty(
 
   if (existingCounterparty) {
     if (websiteUrl) {
-      await supabase
+      const { error: updateError } = await supabase
         .from("counterparties")
         .update({ website_url: websiteUrl })
         .eq("id", existingCounterparty.id)
         .eq("user_id", userId);
+
+      if (updateError) {
+        throw new Error("Unable to update account website.");
+      }
     }
 
     return existingCounterparty.id;

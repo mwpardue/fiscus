@@ -5,7 +5,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DEFAULT_COLOR_TAG_TOKEN, isColorTagToken } from "@/lib/color-tags";
 import type { Database } from "@/lib/database.types";
-import { applyFinancialItemMetadata } from "@/lib/financial-item-metadata";
+import {
+  applyFinancialItemMetadata,
+  ensureCategory,
+  ensureCounterparty,
+  ensureCounterpartyById
+} from "@/lib/financial-item-metadata";
 import { parseMajorAmountToMinor } from "@/lib/money";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { generateDueDates, type ScheduleBasis } from "@/lib/recurrence/generated";
@@ -290,13 +295,33 @@ export async function createEntryAction(
     return true;
   });
   const manualDueDates = uniqueManualRows.map((row) => row.date);
+  let preparedCategoryId: string | null;
+  let preparedCounterpartyId: string | null;
+
+  try {
+    preparedCategoryId = await ensureCategory(supabase, user.id, categoryName);
+    preparedCounterpartyId =
+      accountMode === "existing"
+        ? await ensureCounterpartyById(supabase, user.id, counterpartyId ?? "")
+        : accountMode === "new"
+          ? await ensureCounterparty(
+              supabase,
+              user.id,
+              counterpartyName,
+              counterpartyWebsiteUrl
+            )
+          : null;
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+
   const metadata = {
     accountIconFile: getOptionalFile(formData.get("accountIcon")),
-    categoryName,
+    categoryId: preparedCategoryId,
     colorToken: isColorTagToken(colorToken)
       ? colorToken
       : DEFAULT_COLOR_TAG_TOKEN,
-    counterpartyId: accountMode === "existing" ? counterpartyId ?? null : undefined,
+    counterpartyId: preparedCounterpartyId,
     counterpartyName: accountMode === "new" ? counterpartyName : undefined,
     counterpartyWebsiteUrl:
       accountMode === "new" ? counterpartyWebsiteUrl : undefined,
