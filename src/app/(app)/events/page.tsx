@@ -4,7 +4,10 @@ import { EntityIcon } from "@/app/(app)/entity-icon";
 import { SwipeableEventCard } from "@/app/(app)/swipeable-event-card";
 import { resolveEntityIcons } from "@/lib/entity-icons";
 import { formatMinorAmount, formatMinorAmountForInput } from "@/lib/money";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getRequestUser
+} from "@/lib/supabase/server";
 import {
   archiveOccurrenceAction,
   completeOccurrenceFromCardAction,
@@ -29,9 +32,7 @@ type EventRow = {
 
 export default async function EventsPage() {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
 
   if (!user) {
     redirect("/login");

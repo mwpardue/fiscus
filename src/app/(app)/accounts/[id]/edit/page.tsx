@@ -2,7 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { BackLink } from "@/app/(app)/back-link";
 import { EntityIcon } from "@/app/(app)/entity-icon";
 import { resolveEntityIcons } from "@/lib/entity-icons";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getRequestUser
+} from "@/lib/supabase/server";
 import { updateAccountAction } from "../../actions";
 
 export default async function EditAccountPage({
@@ -12,9 +15,7 @@ export default async function EditAccountPage({
 }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
 
   if (!user) {
     redirect("/login");

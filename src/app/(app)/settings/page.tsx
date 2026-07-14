@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { APP_THEMES, DEFAULT_THEME_TOKEN } from "@/lib/color-tags";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getRequestUser
+} from "@/lib/supabase/server";
 import {
   restoreBackupAction,
   updateThemeAction,
@@ -9,9 +12,7 @@ import {
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
 
   if (!user) {
     redirect("/login");

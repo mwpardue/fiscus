@@ -13,8 +13,14 @@ const PROTECTED_PATH_PREFIXES = [
 ];
 
 export async function updateSession(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete("x-user-email");
+  requestHeaders.delete("x-user-id");
+
   let response = NextResponse.next({
-    request
+    request: {
+      headers: requestHeaders
+    }
   });
   const env = getPublicEnv();
 
@@ -28,7 +34,11 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          response = NextResponse.next({
+            request: {
+              headers: requestHeaders
+            }
+          });
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
@@ -49,6 +59,24 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
+  }
+
+  if (user) {
+    requestHeaders.set("x-user-id", user.id);
+    if (user.email) {
+      requestHeaders.set("x-user-email", user.email);
+    }
+
+    const authenticatedResponse = NextResponse.next({
+      request: {
+        headers: requestHeaders
+      }
+    });
+    response.cookies.getAll().forEach((cookie) => {
+      authenticatedResponse.cookies.set(cookie);
+    });
+
+    return authenticatedResponse;
   }
 
   return response;

@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+export const runtime = "edge";
+
 const BACKUP_SCHEMA = "fiscus.user-backup.v1";
 
 const backupTables = [
@@ -15,11 +17,12 @@ const backupTables = [
 
 export async function GET(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = {
+    email: request.headers.get("x-user-email"),
+    id: request.headers.get("x-user-id")
+  };
 
-  if (!user) {
+  if (!user.id) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

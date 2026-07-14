@@ -5,7 +5,10 @@ import { ColorTagPicker } from "@/app/(app)/entries/color-tag-picker";
 import { DEFAULT_THEME_TOKEN } from "@/lib/color-tags";
 import { resolveEntityIcons } from "@/lib/entity-icons";
 import { formatMinorAmountForInput } from "@/lib/money";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getRequestUser
+} from "@/lib/supabase/server";
 import {
   archiveOccurrenceAction,
   updateOccurrenceAction
@@ -24,9 +27,7 @@ export default async function EditEventPage({
   const search = await searchParams;
   const returnTo = search?.returnTo;
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
 
   if (!user) {
     redirect("/login");

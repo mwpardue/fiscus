@@ -3,7 +3,10 @@ import { EntityIcon } from "@/app/(app)/entity-icon";
 import { DEFAULT_THEME_TOKEN } from "@/lib/color-tags";
 import { resolveEntityIcons } from "@/lib/entity-icons";
 import { formatMinorAmountForInput } from "@/lib/money";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getRequestUser
+} from "@/lib/supabase/server";
 import { updateEntryAction } from "../../actions";
 import { ColorTagPicker } from "../../color-tag-picker";
 
@@ -14,9 +17,7 @@ export default async function EditEntryPage({
 }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
 
   if (!user) {
     redirect("/login");

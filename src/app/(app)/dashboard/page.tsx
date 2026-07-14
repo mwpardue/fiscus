@@ -17,7 +17,10 @@ import {
   summarizeOccurrences,
   type DashboardOccurrence
 } from "@/lib/occurrences";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getRequestUser
+} from "@/lib/supabase/server";
 import {
   archiveOccurrenceAction,
   completeOccurrenceFromCardAction
@@ -38,9 +41,7 @@ export default async function DashboardPage({
   searchParams?: Promise<{ day?: string; month?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
 
   if (!user) {
     redirect("/login");

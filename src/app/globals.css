@@ -4,8 +4,8 @@
 
 :root {
   color-scheme: light;
-  --font-sans: "Space Grotesk", Arial, Helvetica, sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans-fallback: Arial, Helvetica, sans-serif;
+  --font-mono-fallback: "SFMono-Regular", Consolas, monospace;
   --color-ink: 17 24 42;
   --color-paper: 233 235 240;
   --color-card: 255 255 255;
@@ -55,7 +55,7 @@ body {
   margin: 0;
   background: rgb(var(--color-paper));
   color: rgb(var(--color-ink));
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), var(--font-sans-fallback);
 }
 
 main {
@@ -430,7 +430,7 @@ code,
 kbd,
 pre,
 .font-mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), var(--font-mono-fallback);
 }
 
 a {

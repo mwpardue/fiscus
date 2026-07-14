@@ -3,6 +3,8 @@ import { normalizeAuthRedirect } from "@/lib/auth/redirects";
 import { ensureProfile } from "@/lib/profiles";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+export const runtime = "edge";
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");

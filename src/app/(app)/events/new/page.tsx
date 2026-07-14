@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { EntryForm } from "@/app/(app)/entries/new/entry-form";
 import { DEFAULT_THEME_TOKEN } from "@/lib/color-tags";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getRequestUser
+} from "@/lib/supabase/server";
 
 export default async function NewEventPage({
   searchParams
@@ -10,9 +13,7 @@ export default async function NewEventPage({
 }) {
   const supabase = await createServerSupabaseClient();
   const params = await searchParams;
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
 
   if (!user) {
     redirect("/login");

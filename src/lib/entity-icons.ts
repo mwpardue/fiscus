@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import type { Database } from "@/lib/database.types";
 
 const ICON_BUCKET = "account-icons";
@@ -10,6 +11,19 @@ const ICON_MIME_TYPES = new Map([
 ]);
 
 type BillingSupabaseClient = SupabaseClient<Database>;
+
+const getCachedSignedIconUrl = (supabase: BillingSupabaseClient) =>
+  unstable_cache(
+    async (path: string) => {
+      const { data } = await supabase.storage
+        .from(ICON_BUCKET)
+        .createSignedUrl(path, 60 * 60);
+
+      return data?.signedUrl ?? null;
+    },
+    ["account-icons", "signed-url"],
+    { revalidate: 3500 }
+  );
 
 export type EntityIconSource = {
   accountBrandfetchIconUrl?: string | null;
@@ -103,15 +117,14 @@ export async function resolveEntityIcons(
   }
 
   const signedUrls = new Map<string, string>();
+  const createSignedIconUrl = getCachedSignedIconUrl(supabase);
 
   await Promise.all(
     Array.from(pathSet).map(async (path) => {
-      const { data } = await supabase.storage
-        .from(ICON_BUCKET)
-        .createSignedUrl(path, 60 * 60);
+      const signedUrl = await createSignedIconUrl(path);
 
-      if (data?.signedUrl) {
-        signedUrls.set(path, data.signedUrl);
+      if (signedUrl) {
+        signedUrls.set(path, signedUrl);
       }
     })
   );
