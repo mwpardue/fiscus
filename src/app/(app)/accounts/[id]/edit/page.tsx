@@ -8,6 +8,8 @@ import {
 } from "@/lib/supabase/server";
 import { updateAccountAction } from "../../actions";
 
+export const runtime = "edge";
+
 export default async function EditAccountPage({
   params
 }: {

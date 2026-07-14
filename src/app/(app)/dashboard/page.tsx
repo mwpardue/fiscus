@@ -35,6 +35,8 @@ type DashboardPayment = {
   status: "active" | "voided";
 };
 
+export const runtime = "edge";
+
 export default async function DashboardPage({
   searchParams
 }: {
@@ -51,27 +53,22 @@ export default async function DashboardPage({
   const params = await searchParams;
   const selectedMonth = normalizeMonthParam(params?.month, today);
   const selectedDay = normalizeDayParam(params?.day, selectedMonth);
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select(
-      "balance_anchor_amount_minor,balance_anchor_recorded_at,default_currency_code,theme_token,week_starts_on"
-    )
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const defaultCurrencyCode = profile?.default_currency_code ?? "USD";
-  const themeToken = profile?.theme_token ?? DEFAULT_THEME_TOKEN;
-  const weekStartsOn = profile?.week_starts_on ?? 0;
-  const balanceAnchorAmountMinor =
-    profile?.balance_anchor_amount_minor ?? null;
-  const balanceAnchorRecordedAt =
-    profile?.balance_anchor_recorded_at ?? null;
-  const calendarFrame = buildCalendarFrame(selectedMonth, weekStartsOn);
+  const provisionalCalendarFrame = buildCalendarFrame(selectedMonth, 0);
+  const queryBounds = expandCalendarFrameBounds(provisionalCalendarFrame);
   const [
+    { data: profile },
     { data: occurrences, error },
     { data: projectionOccurrences },
     { data: payments },
     { data: counterparties }
   ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "balance_anchor_amount_minor,balance_anchor_recorded_at,default_currency_code,theme_token,week_starts_on"
+      )
+      .eq("user_id", user.id)
+      .maybeSingle(),
     supabase
       .from("occurrences")
       .select(
@@ -80,8 +77,8 @@ export default async function DashboardPage({
       .eq("user_id", user.id)
       .is("archived_at", null)
       .eq("lifecycle_status", "upcoming")
-      .gte("due_date", calendarFrame.visibleStart)
-      .lte("due_date", calendarFrame.visibleEnd)
+      .gte("due_date", queryBounds.visibleStart)
+      .lte("due_date", queryBounds.visibleEnd)
       .order("due_date", { ascending: true }),
     selectedDay && selectedDay < today
       ? Promise.resolve({ data: [] as DashboardOccurrence[] })
@@ -94,23 +91,32 @@ export default async function DashboardPage({
           .is("archived_at", null)
           .eq("lifecycle_status", "upcoming")
           .gte("due_date", today)
-          .lte("due_date", selectedDay ?? calendarFrame.visibleEnd)
+          .lte("due_date", selectedDay ?? queryBounds.visibleEnd)
           .order("due_date", { ascending: true }),
-    balanceAnchorRecordedAt
-      ? supabase
-          .from("payments")
-          .select("amount_minor,created_at,kind,status")
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .gt("created_at", balanceAnchorRecordedAt)
-      : Promise.resolve({ data: [] as DashboardPayment[] }),
+    supabase
+      .from("payments")
+      .select("amount_minor,created_at,kind,status")
+      .eq("user_id", user.id)
+      .eq("status", "active"),
     supabase
       .from("counterparties")
       .select("id,name,icon_storage_path,brandfetch_icon_url")
       .eq("user_id", user.id)
   ]);
 
-  const calendarOccurrenceRows = (occurrences ?? []) as DashboardOccurrence[];
+  const defaultCurrencyCode = profile?.default_currency_code ?? "USD";
+  const themeToken = profile?.theme_token ?? DEFAULT_THEME_TOKEN;
+  const weekStartsOn = profile?.week_starts_on ?? 0;
+  const balanceAnchorAmountMinor =
+    profile?.balance_anchor_amount_minor ?? null;
+  const balanceAnchorRecordedAt =
+    profile?.balance_anchor_recorded_at ?? null;
+  const calendarFrame = buildCalendarFrame(selectedMonth, weekStartsOn);
+  const calendarOccurrenceRows = ((occurrences ?? []) as DashboardOccurrence[]).filter(
+    (occurrence) =>
+      occurrence.due_date >= calendarFrame.visibleStart &&
+      occurrence.due_date <= calendarFrame.visibleEnd
+  );
   const visibleOccurrenceRows = selectedDay
     ? calendarOccurrenceRows.filter((occurrence) => occurrence.due_date === selectedDay)
     : calendarOccurrenceRows;
@@ -148,7 +154,11 @@ export default async function DashboardPage({
   );
   const summary = summarizeOccurrences(visibleOccurrenceRows);
   const completedActivityMinor = summarizeCompletedActivity(
-    (payments ?? []) as DashboardPayment[]
+    balanceAnchorRecordedAt
+      ? ((payments ?? []) as DashboardPayment[]).filter(
+          (payment) => payment.created_at > balanceAnchorRecordedAt
+        )
+      : []
   );
   const adjustedCurrentBalanceMinor =
     balanceAnchorAmountMinor === null
@@ -156,7 +166,9 @@ export default async function DashboardPage({
       : balanceAnchorAmountMinor + completedActivityMinor;
   const weeklyGroups = buildWeeklyOccurrenceGroups(
     visibleOccurrenceRows,
-    (projectionOccurrences ?? []) as DashboardOccurrence[],
+    ((projectionOccurrences ?? []) as DashboardOccurrence[]).filter(
+      (occurrence) => occurrence.due_date <= calendarFrame.visibleEnd
+    ),
     weekStartsOn,
     adjustedCurrentBalanceMinor,
     selectedDay
@@ -714,6 +726,13 @@ function buildCalendarFrame(month: string, weekStartsOn: number) {
     visibleEnd: days[days.length - 1]?.date ?? formatDateOnly(monthEnd),
     visibleStart: days[0]?.date ?? formatDateOnly(monthStart),
     weekdays: buildWeekdays(normalizedWeekStart)
+  };
+}
+
+function expandCalendarFrameBounds(calendarFrame: ReturnType<typeof buildCalendarFrame>) {
+  return {
+    visibleEnd: formatDateOnly(addUtcDays(parseDateOnly(calendarFrame.visibleEnd), 6)),
+    visibleStart: formatDateOnly(addUtcDays(parseDateOnly(calendarFrame.visibleStart), -6))
   };
 }
 

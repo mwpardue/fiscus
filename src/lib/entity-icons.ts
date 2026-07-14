@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { unstable_cache } from "next/cache";
 import type { Database } from "@/lib/database.types";
 
 const ICON_BUCKET = "account-icons";
 const ICON_MAX_BYTES = 1024 * 1024;
+const SIGNED_ICON_URL_TTL_MS = 3500 * 1000;
 const ICON_MIME_TYPES = new Map([
   ["image/png", "png"],
   ["image/jpeg", "jpg"],
@@ -12,18 +12,41 @@ const ICON_MIME_TYPES = new Map([
 
 type BillingSupabaseClient = SupabaseClient<Database>;
 
-const getCachedSignedIconUrl = (supabase: BillingSupabaseClient) =>
-  unstable_cache(
-    async (path: string) => {
-      const { data } = await supabase.storage
-        .from(ICON_BUCKET)
-        .createSignedUrl(path, 60 * 60);
+const signedIconUrlCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    signedUrl: string;
+  }
+>();
 
-      return data?.signedUrl ?? null;
-    },
-    ["account-icons", "signed-url"],
-    { revalidate: 3500 }
-  );
+async function getCachedSignedIconUrl(
+  supabase: BillingSupabaseClient,
+  path: string
+) {
+  const cached = signedIconUrlCache.get(path);
+  const now = Date.now();
+
+  if (cached && cached.expiresAt > now) {
+    return cached.signedUrl;
+  }
+
+  const { data } = await supabase.storage
+    .from(ICON_BUCKET)
+    .createSignedUrl(path, 60 * 60);
+
+  if (!data?.signedUrl) {
+    signedIconUrlCache.delete(path);
+    return null;
+  }
+
+  signedIconUrlCache.set(path, {
+    expiresAt: now + SIGNED_ICON_URL_TTL_MS,
+    signedUrl: data.signedUrl
+  });
+
+  return data.signedUrl;
+}
 
 export type EntityIconSource = {
   accountBrandfetchIconUrl?: string | null;
@@ -117,11 +140,10 @@ export async function resolveEntityIcons(
   }
 
   const signedUrls = new Map<string, string>();
-  const createSignedIconUrl = getCachedSignedIconUrl(supabase);
 
   await Promise.all(
     Array.from(pathSet).map(async (path) => {
-      const signedUrl = await createSignedIconUrl(path);
+      const signedUrl = await getCachedSignedIconUrl(supabase, path);
 
       if (signedUrl) {
         signedUrls.set(path, signedUrl);

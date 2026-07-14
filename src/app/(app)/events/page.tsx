@@ -30,6 +30,8 @@ type EventRow = {
   } | null;
 };
 
+export const runtime = "edge";
+
 export default async function EventsPage() {
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();

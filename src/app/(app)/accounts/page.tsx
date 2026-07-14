@@ -8,6 +8,8 @@ import {
 } from "@/lib/supabase/server";
 import { createAccountAction } from "./actions";
 
+export const runtime = "edge";
+
 export default async function AccountsPage() {
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();

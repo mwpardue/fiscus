@@ -6,6 +6,8 @@ import {
   getRequestUser
 } from "@/lib/supabase/server";
 
+export const runtime = "edge";
+
 export default async function NewEventPage({
   searchParams
 }: {

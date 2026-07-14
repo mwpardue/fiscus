@@ -10,6 +10,8 @@ import {
   updateWeekStartAction
 } from "./actions";
 
+export const runtime = "edge";
+
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();

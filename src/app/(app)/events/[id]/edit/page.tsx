@@ -16,6 +16,8 @@ import {
 import { updateEventPlanAction } from "../../actions";
 import { EventAccountSelector } from "./account-selector";
 
+export const runtime = "edge";
+
 export default async function EditEventPage({
   params,
   searchParams

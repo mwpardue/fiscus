@@ -10,6 +10,8 @@ import {
 import { updateEntryAction } from "../../actions";
 import { ColorTagPicker } from "../../color-tag-picker";
 
+export const runtime = "edge";
+
 export default async function EditEntryPage({
   params
 }: {
