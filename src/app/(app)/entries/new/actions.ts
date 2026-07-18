@@ -16,6 +16,8 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 import { generateDueDates, type ScheduleBasis } from "@/lib/recurrence/generated";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+const ONGOING_MATERIALIZED_OCCURRENCE_COUNT = 12;
+
 const newEntrySchema = z
   .object({
     kind: z.enum(["bill", "income"]),
@@ -381,7 +383,10 @@ export async function createEntryAction(
     redirect(getSafeReturnTo(returnTo));
   }
 
-  const generatedCount = scheduleMode === "finite" ? occurrenceCount ?? 0 : 12;
+  const generatedCount =
+    scheduleMode === "finite"
+      ? occurrenceCount ?? 0
+      : ONGOING_MATERIALIZED_OCCURRENCE_COUNT;
   const generatedAnchorDate = anchorDate ?? "";
   const activeWeekdays =
     scheduleBasis === "weekday"

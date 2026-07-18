@@ -100,6 +100,12 @@ export default async function EventsPage() {
           </p>
         ) : null}
 
+        <section className="rounded border border-line bg-white p-4 text-sm leading-6 text-gray-700">
+          Ongoing schedules are stored in generated batches. The Dashboard
+          extends them as you view future months; this page shows the generated
+          events currently stored.
+        </section>
+
         <section className="grid gap-2">
           {eventRows.map((event) => {
             const icon = iconByEventId.get(event.id) ?? {

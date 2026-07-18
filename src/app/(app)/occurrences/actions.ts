@@ -212,7 +212,8 @@ function getSafeReturnPath(value: string | undefined, fallback: Route): Route {
   if (
     value === "/dashboard" ||
     value.startsWith("/dashboard?") ||
-    value === "/events"
+    value === "/events" ||
+    /^\/accounts\/[0-9a-f-]+\/edit$/i.test(value)
   ) {
     return value as Route;
   }

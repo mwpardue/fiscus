@@ -15,6 +15,7 @@ import {
 } from "../../../occurrences/actions";
 import { updateEventPlanAction } from "../../actions";
 import { EventAccountSelector } from "./account-selector";
+import { ScheduleEditor } from "./schedule-editor";
 
 export const runtime = "edge";
 
@@ -64,6 +65,7 @@ export default async function EditEventPage({
     { data: account },
     { data: accounts },
     { data: futureEvents },
+    { data: recurrenceRules },
     { data: profile }
   ] = await Promise.all([
     entry.category_id
@@ -92,6 +94,15 @@ export default async function EditEventPage({
       .is("archived_at", null)
       .gte("due_date", today)
       .order("due_date", { ascending: true }),
+    supabase
+      .from("recurrence_rules")
+      .select(
+        "id,mode,interval_unit,interval_count,anchor_date,anchor_weekday,ordinal_week,schedule_basis,short_month_behavior,occurrence_count,business_day_adjustment"
+      )
+      .eq("financial_item_id", entry.id)
+      .eq("status", "active")
+      .in("mode", ["ongoing", "finite"])
+      .order("created_at", { ascending: true }),
     supabase
       .from("profiles")
       .select("theme_token")
@@ -397,6 +408,27 @@ export default async function EditEventPage({
               Save plan
             </button>
           </form>
+
+          {(recurrenceRules ?? []).length > 0 ? (
+            <section className="grid gap-3 border-t border-line pt-5">
+              <div>
+                <h2 className="text-sm font-semibold text-ink">Schedule</h2>
+                <p className="mt-1 text-sm text-gray-700">
+                  Saving a schedule replaces unpaid generated events for that
+                  rule. Paid, received, skipped, and deleted events are
+                  preserved.
+                </p>
+              </div>
+              {(recurrenceRules ?? []).map((rule) => (
+                <ScheduleEditor
+                  eventId={occurrence.id}
+                  key={rule.id}
+                  returnTo={returnTo}
+                  rule={rule}
+                />
+              ))}
+            </section>
+          ) : null}
 
           <form action={archiveOccurrenceAction} className="border-t border-line pt-5">
             <input name="id" type="hidden" value={occurrence.id} />

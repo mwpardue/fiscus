@@ -355,6 +355,14 @@ export type Database = {
         };
         Returns: string;
       };
+      add_generated_occurrences_to_rule: {
+        Args: {
+          p_rule_id: string;
+          p_due_dates: string[];
+          p_reason?: string | null;
+        };
+        Returns: number;
+      };
       create_generated_financial_item: {
         Args: {
           p_anchor_date: string;
@@ -451,6 +459,30 @@ export type Database = {
       skip_occurrence: {
         Args: { p_occurrence_id: string; p_reason?: string | null };
         Returns: Database["public"]["Tables"]["occurrences"]["Row"];
+      };
+      update_generated_recurrence_rule: {
+        Args: {
+          p_rule_id: string;
+          p_mode: Database["public"]["Enums"]["schedule_mode"];
+          p_interval_unit: Database["public"]["Enums"]["interval_unit"];
+          p_interval_count: number;
+          p_anchor_date: string;
+          p_anchor_day: number | null;
+          p_short_month_behavior:
+            | Database["public"]["Enums"]["short_month_behavior"]
+            | null;
+          p_occurrence_count: number | null;
+          p_due_dates: string[];
+          p_schedule_basis?: string;
+          p_anchor_weekday?: number | null;
+          p_ordinal_week?: number | null;
+          p_business_day_adjustment?:
+            | "none"
+            | "previous_business_day"
+            | "next_business_day";
+          p_reason?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["recurrence_rules"]["Row"];
       };
     };
     Enums: {

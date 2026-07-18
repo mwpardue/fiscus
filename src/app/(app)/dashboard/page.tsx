@@ -17,6 +17,7 @@ import {
   summarizeOccurrences,
   type DashboardOccurrence
 } from "@/lib/occurrences";
+import { ensureOngoingOccurrencesThrough } from "@/lib/recurrence/ensure-generated";
 import {
   createServerSupabaseClient,
   getRequestUser
@@ -27,6 +28,7 @@ import {
 } from "../occurrences/actions";
 import { updateBalanceAnchorAction } from "./actions";
 import { CalendarNavigation } from "./calendar-navigation";
+import { DashboardPrefetch } from "./prefetch";
 
 type DashboardPayment = {
   amount_minor: number;
@@ -55,6 +57,7 @@ export default async function DashboardPage({
   const selectedDay = normalizeDayParam(params?.day, selectedMonth);
   const provisionalCalendarFrame = buildCalendarFrame(selectedMonth, 0);
   const queryBounds = expandCalendarFrameBounds(provisionalCalendarFrame);
+  await ensureOngoingOccurrencesThrough(supabase, queryBounds.visibleEnd);
   const [
     { data: profile },
     { data: occurrences, error },
@@ -178,9 +181,13 @@ export default async function DashboardPage({
     calendarOccurrenceRows,
     iconByOccurrenceId
   );
+  const nextCalendarFrame = buildCalendarFrame(calendarFrame.nextMonth, weekStartsOn);
+  const nextMonthPrefetchEnd =
+    expandCalendarFrameBounds(nextCalendarFrame).visibleEnd;
 
   return (
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
+      <DashboardPrefetch visibleEnd={nextMonthPrefetchEnd} />
       <div className="mx-auto grid max-w-5xl gap-6">
         <header className="border-b border-line pb-4">
           <div>

@@ -8,7 +8,10 @@ import { DEFAULT_COLOR_TAG_TOKEN, isColorTagToken } from "@/lib/color-tags";
 import { applyFinancialItemMetadata } from "@/lib/financial-item-metadata";
 import { parseMajorAmountToMinor } from "@/lib/money";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { generateDueDates, type ScheduleBasis } from "@/lib/recurrence/generated";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+const ONGOING_MATERIALIZED_OCCURRENCE_COUNT = 12;
 
 const updateEventPlanSchema = z
   .object({
@@ -45,6 +48,86 @@ const updateEventPlanSchema = z
         code: "custom",
         path: ["counterpartyName"],
         message: "Enter the new account name."
+      });
+    }
+  });
+
+const updateGeneratedScheduleSchema = z
+  .object({
+    anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    businessDayAdjustment: z.enum([
+      "none",
+      "previous_business_day",
+      "next_business_day"
+    ]),
+    eventId: z.string().uuid(),
+    intervalCount: z.coerce.number().int().min(1).max(24),
+    intervalUnit: z.enum(["day", "week", "month", "year"]),
+    occurrenceCount: z.coerce.number().int().min(1).max(120).optional(),
+    ordinalWeek: z.coerce
+      .number()
+      .int()
+      .refine((value) => value === -1 || (value >= 1 && value <= 4))
+      .optional(),
+    returnTo: z.string().trim().optional(),
+    ruleId: z.string().uuid(),
+    scheduleBasis: z.enum(["date", "weekday", "month_weekday"]),
+    scheduleMode: z.enum(["ongoing", "finite"]),
+    shortMonthBehavior: z.enum(["last_day", "next_month", "skip"]),
+    weekday: z.coerce.number().int().min(0).max(6).optional()
+  })
+  .superRefine((value, context) => {
+    if (value.scheduleMode === "finite" && !value.occurrenceCount) {
+      context.addIssue({
+        code: "custom",
+        path: ["occurrenceCount"],
+        message: "Enter how many events to create."
+      });
+    }
+
+    if (value.scheduleBasis === "weekday" && value.intervalUnit !== "week") {
+      context.addIssue({
+        code: "custom",
+        path: ["intervalUnit"],
+        message: "Weekly weekday schedules must repeat in weeks."
+      });
+    }
+
+    if (
+      value.scheduleBasis === "month_weekday" &&
+      value.intervalUnit !== "month"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["intervalUnit"],
+        message: "Monthly weekday schedules must repeat in months."
+      });
+    }
+
+    if (value.scheduleBasis !== "date" && value.intervalUnit === "year") {
+      context.addIssue({
+        code: "custom",
+        path: ["intervalUnit"],
+        message: "Yearly schedules must use date recurrence."
+      });
+    }
+
+    if (value.scheduleBasis !== "date" && value.weekday === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["weekday"],
+        message: "Choose a weekday for this schedule."
+      });
+    }
+
+    if (
+      value.scheduleBasis === "month_weekday" &&
+      value.ordinalWeek === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["ordinalWeek"],
+        message: "Choose which week of the month to use."
       });
     }
   });
@@ -175,6 +258,111 @@ export async function updateEventPlanAction(formData: FormData) {
   );
 }
 
+export async function updateGeneratedScheduleAction(formData: FormData) {
+  const parsed = updateGeneratedScheduleSchema.safeParse({
+    anchorDate: formData.get("anchorDate"),
+    businessDayAdjustment: formData.get("businessDayAdjustment") ?? "none",
+    eventId: formData.get("eventId"),
+    intervalCount: formData.get("intervalCount") ?? "1",
+    intervalUnit: formData.get("intervalUnit") ?? "month",
+    occurrenceCount: formData.get("occurrenceCount") || undefined,
+    ordinalWeek: formData.get("ordinalWeek") || undefined,
+    returnTo: formData.get("returnTo") || undefined,
+    ruleId: formData.get("ruleId"),
+    scheduleBasis: formData.get("scheduleBasis") ?? "date",
+    scheduleMode: formData.get("scheduleMode"),
+    shortMonthBehavior: formData.get("shortMonthBehavior") ?? "last_day",
+    weekday: formData.get("weekday") || undefined
+  });
+
+  if (!parsed.success) {
+    throw new Error(
+      parsed.error.issues[0]?.message ?? "Check the schedule and try again."
+    );
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  await enforceRateLimit("planMutation", user.id);
+
+  const {
+    anchorDate,
+    businessDayAdjustment,
+    eventId,
+    intervalCount,
+    intervalUnit,
+    occurrenceCount,
+    ordinalWeek,
+    returnTo,
+    ruleId,
+    scheduleBasis,
+    scheduleMode,
+    shortMonthBehavior,
+    weekday
+  } = parsed.data;
+  const generatedCount =
+    scheduleMode === "finite"
+      ? occurrenceCount ?? 0
+      : ONGOING_MATERIALIZED_OCCURRENCE_COUNT;
+  const dueDates = generateDueDates({
+    anchorDate,
+    businessDayAdjustment,
+    count: generatedCount,
+    intervalCount,
+    intervalUnit,
+    ordinalWeek: ordinalWeek ?? null,
+    scheduleBasis: scheduleBasis as ScheduleBasis,
+    shortMonthBehavior,
+    weekday: weekday ?? null
+  });
+
+  if (dueDates.length === 0) {
+    throw new Error("Check the schedule dates and try again.");
+  }
+
+  const anchorDay = Number(anchorDate.slice(8, 10));
+  const { error } = await supabase.rpc("update_generated_recurrence_rule", {
+    p_anchor_date: anchorDate,
+    p_anchor_day:
+      (intervalUnit === "month" || intervalUnit === "year") &&
+      scheduleBasis === "date"
+        ? anchorDay
+        : null,
+    p_anchor_weekday: scheduleBasis === "date" ? null : weekday ?? null,
+    p_business_day_adjustment: businessDayAdjustment,
+    p_due_dates: dueDates,
+    p_interval_count: intervalCount,
+    p_interval_unit: intervalUnit,
+    p_mode: scheduleMode,
+    p_occurrence_count: scheduleMode === "finite" ? generatedCount : null,
+    p_ordinal_week:
+      scheduleBasis === "month_weekday" ? ordinalWeek ?? null : null,
+    p_reason: "Schedule edited from event edit page",
+    p_rule_id: ruleId,
+    p_schedule_basis: scheduleBasis,
+    p_short_month_behavior:
+      intervalUnit === "month" || intervalUnit === "year"
+        ? shortMonthBehavior
+        : null
+  });
+
+  if (error) {
+    throw new Error("Unable to update that schedule.");
+  }
+
+  revalidatePath("/events");
+  revalidatePath(`/events/${eventId}/edit`);
+  revalidatePath("/dashboard");
+  redirect(getSafeReturnTo(returnTo, `/events/${eventId}/edit` as Route));
+}
+
 async function updateFutureOccurrenceDates(
   formData: FormData,
   financialItemId: string,
@@ -228,7 +416,8 @@ function getSafeReturnTo(
   if (
     returnTo === "/dashboard" ||
     returnTo.startsWith("/dashboard?") ||
-    returnTo === "/events"
+    returnTo === "/events" ||
+    /^\/accounts\/[0-9a-f-]+\/edit$/i.test(returnTo)
   ) {
     return returnTo as Route;
   }

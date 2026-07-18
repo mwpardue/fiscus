@@ -95,6 +95,12 @@ export default async function AccountsPage() {
           </p>
         ) : null}
 
+        <section className="rounded border border-line bg-white p-4 text-sm leading-6 text-gray-700">
+          Ongoing schedules are stored in generated batches. The Dashboard
+          extends them as you view future months; account event lists show the
+          generated events currently stored.
+        </section>
+
         <section className="grid gap-2">
           {(accounts ?? []).map((account) => {
             const icon = iconByAccountId.get(account.id) ?? {
@@ -105,8 +111,9 @@ export default async function AccountsPage() {
             };
 
             return (
-              <article
-                className="grid gap-3 rounded border border-line bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+              <Link
+                className="block rounded border border-line bg-white p-4 transition hover:border-mint focus:outline-none focus:ring-2 focus:ring-mint/30"
+                href={`/accounts/${account.id}/edit`}
                 key={account.id}
               >
                 <div className="flex min-w-0 items-center gap-3">
@@ -116,17 +123,11 @@ export default async function AccountsPage() {
                     <p className="text-sm text-gray-700">
                       {account.website_url
                         ? formatWebsite(account.website_url)
-                        : `Updated ${formatDate(account.updated_at)}`}
+                      : `Updated ${formatDate(account.updated_at)}`}
                     </p>
                   </div>
                 </div>
-                <Link
-                  className="inline-flex min-h-10 items-center justify-center rounded border border-line px-3 text-sm font-semibold"
-                  href={`/accounts/${account.id}/edit`}
-                >
-                  Edit
-                </Link>
-              </article>
+              </Link>
             );
           })}
 
