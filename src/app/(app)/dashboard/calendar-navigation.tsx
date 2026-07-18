@@ -4,7 +4,6 @@ import { usePathname, useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useTransition } from "react";
 import { getColorTag } from "@/lib/color-tags";
-import type { ResolvedEntityIcon } from "@/lib/entity-icons";
 
 type CalendarDay = {
   colorTokens: string[];
@@ -12,7 +11,6 @@ type CalendarDay = {
   dayOfMonth: number;
   events: Array<{
     amountLabel: string;
-    icon?: ResolvedEntityIcon;
     title: string;
   }>;
   inCurrentMonth: boolean;
@@ -32,13 +30,15 @@ export function CalendarNavigation({
   selectedDay,
   selectedMonth,
   themeToken,
-  today
+  today,
+  view
 }: {
   calendar: DashboardCalendar;
   selectedDay: string | null;
   selectedMonth: string;
   themeToken: string;
   today: string;
+  view?: "calendar" | "list";
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -49,6 +49,9 @@ export function CalendarNavigation({
 
     if (day) {
       params.set("day", day);
+    }
+    if (view === "calendar") {
+      params.set("view", view);
     }
 
     startTransition(() => {
@@ -61,7 +64,7 @@ export function CalendarNavigation({
   return (
     <section
       aria-busy={isPending}
-      className="grid gap-3 rounded border border-line bg-white p-4"
+      className="grid gap-4 rounded border border-line bg-white p-4 lg:p-5"
     >
       <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
         <button
@@ -108,8 +111,10 @@ export function CalendarNavigation({
               aria-current={isToday ? "date" : undefined}
               aria-label={`${day.label}, ${day.colorTokens.length} scheduled events`}
               className={[
-                "relative h-16 rounded border p-2 text-left transition-colors disabled:opacity-60",
+                "relative h-12 rounded border p-1.5 text-left transition-colors disabled:opacity-60 sm:h-14",
+                "lg:h-[4.75rem] lg:p-2",
                 getDayButtonClassName({
+                  hasSelectedDay: Boolean(selectedDay),
                   inCurrentMonth: day.inCurrentMonth,
                   isSelected,
                   isToday
@@ -135,12 +140,12 @@ export function CalendarNavigation({
                 {day.colorTokens.length > 0 ? (
                   <span
                     aria-hidden="true"
-                    className="relative flex h-5 max-w-full items-center justify-end pl-2"
+                    className="relative flex h-4 max-w-full items-center justify-end pl-2"
                   >
                     <span className="group flex max-w-full items-center justify-end overflow-hidden">
                       {day.colorTokens.slice(0, 4).map((colorToken, index) => (
                         <span
-                          className="-ml-1.5 block h-3.5 w-3.5 rounded-full border border-white shadow-sm first:ml-0"
+                          className="-ml-1.5 block h-3 w-3 rounded-full border border-white shadow-sm first:ml-0"
                           key={`${day.date}-${colorToken}-${index}`}
                           style={calendarDotStyle(colorToken, themeToken)}
                         />
@@ -185,10 +190,9 @@ function CalendarEventTooltip({
       <span className="grid gap-2">
         {events.slice(0, 5).map((event, index) => (
           <span
-            className="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2 text-xs"
+            className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs"
             key={`${event.title}-${event.amountLabel}-${index}`}
           >
-            <CalendarEventIcon icon={event.icon} title={event.title} />
             <span className="truncate font-semibold text-ink">{event.title}</span>
             <span className="font-medium text-gray-700">{event.amountLabel}</span>
           </span>
@@ -203,50 +207,13 @@ function CalendarEventTooltip({
   );
 }
 
-function CalendarEventIcon({
-  icon,
-  title
-}: {
-  icon: ResolvedEntityIcon | undefined;
-  title: string;
-}) {
-  const className =
-    "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-paper text-[0.625rem] font-semibold text-ink";
-
-  if (icon?.signedUrl || icon?.brandfetchUrl) {
-    return (
-      <span className={className}>
-        <img
-          alt=""
-          className="h-full w-full object-contain p-0.5"
-          referrerPolicy="strict-origin-when-cross-origin"
-          src={icon.signedUrl ?? icon.brandfetchUrl ?? undefined}
-        />
-      </span>
-    );
-  }
-
-  return (
-    <span aria-hidden="true" className={className}>
-      {icon?.initials ?? getFallbackInitials(title)}
-    </span>
-  );
-}
-
-function getFallbackInitials(title: string) {
-  return title
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? "")
-    .join("") || "?";
-}
-
 function getDayButtonClassName({
+  hasSelectedDay,
   inCurrentMonth,
   isSelected,
   isToday
 }: {
+  hasSelectedDay: boolean;
   inCurrentMonth: boolean;
   isSelected: boolean;
   isToday: boolean;
@@ -255,7 +222,7 @@ function getDayButtonClassName({
     return "border-mint bg-mint/10 ring-2 ring-mint/20";
   }
 
-  if (isToday) {
+  if (isToday && !hasSelectedDay) {
     return "border-mint bg-mint/10";
   }
 

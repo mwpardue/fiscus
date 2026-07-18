@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
-import { EntityIcon } from "@/app/(app)/entity-icon";
 import { SwipeableEventCard } from "@/app/(app)/swipeable-event-card";
 import {
   formatMinorAmount,
@@ -11,7 +10,6 @@ import {
   DEFAULT_THEME_TOKEN,
   getColorTag
 } from "@/lib/color-tags";
-import { resolveEntityIcons } from "@/lib/entity-icons";
 import {
   isOverdue,
   summarizeOccurrences,
@@ -42,7 +40,7 @@ export const runtime = "edge";
 export default async function DashboardPage({
   searchParams
 }: {
-  searchParams?: Promise<{ day?: string; month?: string }>;
+  searchParams?: Promise<{ day?: string; month?: string; view?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();
@@ -55,8 +53,19 @@ export default async function DashboardPage({
   const params = await searchParams;
   const selectedMonth = normalizeMonthParam(params?.month, today);
   const selectedDay = normalizeDayParam(params?.day, selectedMonth);
+  const selectedView = params?.view === "calendar" ? "calendar" : "list";
   const provisionalCalendarFrame = buildCalendarFrame(selectedMonth, 0);
-  const queryBounds = expandCalendarFrameBounds(provisionalCalendarFrame);
+  const provisionalQueryBounds = expandCalendarFrameBounds(provisionalCalendarFrame);
+  const queryBounds = {
+    visibleEnd:
+      provisionalQueryBounds.visibleEnd > today
+        ? provisionalQueryBounds.visibleEnd
+        : today,
+    visibleStart:
+      provisionalQueryBounds.visibleStart < today
+        ? provisionalQueryBounds.visibleStart
+        : today
+  };
   await ensureOngoingOccurrencesThrough(supabase, queryBounds.visibleEnd);
   const [
     { data: profile },
@@ -75,7 +84,7 @@ export default async function DashboardPage({
     supabase
       .from("occurrences")
       .select(
-        "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id,icon_storage_path,brandfetch_icon_url)"
+        "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id)"
       )
       .eq("user_id", user.id)
       .is("archived_at", null)
@@ -83,19 +92,17 @@ export default async function DashboardPage({
       .gte("due_date", queryBounds.visibleStart)
       .lte("due_date", queryBounds.visibleEnd)
       .order("due_date", { ascending: true }),
-    selectedDay && selectedDay < today
-      ? Promise.resolve({ data: [] as DashboardOccurrence[] })
-      : supabase
-          .from("occurrences")
-          .select(
-            "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id,icon_storage_path,brandfetch_icon_url)"
-          )
-          .eq("user_id", user.id)
-          .is("archived_at", null)
-          .eq("lifecycle_status", "upcoming")
-          .gte("due_date", today)
-          .lte("due_date", selectedDay ?? queryBounds.visibleEnd)
-          .order("due_date", { ascending: true }),
+    supabase
+      .from("occurrences")
+      .select(
+        "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id)"
+      )
+      .eq("user_id", user.id)
+      .is("archived_at", null)
+      .eq("lifecycle_status", "upcoming")
+      .gte("due_date", today)
+      .lte("due_date", queryBounds.visibleEnd)
+      .order("due_date", { ascending: true }),
     supabase
       .from("payments")
       .select("amount_minor,created_at,kind,status")
@@ -103,7 +110,7 @@ export default async function DashboardPage({
       .eq("status", "active"),
     supabase
       .from("counterparties")
-      .select("id,name,icon_storage_path,brandfetch_icon_url")
+      .select("id,name")
       .eq("user_id", user.id)
   ]);
 
@@ -120,42 +127,19 @@ export default async function DashboardPage({
       occurrence.due_date >= calendarFrame.visibleStart &&
       occurrence.due_date <= calendarFrame.visibleEnd
   );
-  const visibleOccurrenceRows = selectedDay
-    ? calendarOccurrenceRows.filter((occurrence) => occurrence.due_date === selectedDay)
-    : calendarOccurrenceRows;
+  const dayPanelDate = selectedDay ?? today;
+  const dayPanelOccurrenceRows = ((occurrences ?? []) as DashboardOccurrence[]).filter(
+    (occurrence) => occurrence.due_date === dayPanelDate
+  );
   const accountById = new Map(
     (counterparties ?? []).map((counterparty) => [
       counterparty.id,
       {
-        brandfetchIconUrl: counterparty.brandfetch_icon_url,
-        iconPath: counterparty.icon_storage_path,
         name: counterparty.name
       }
     ])
   );
-  const calendarEventIcons = await resolveEntityIcons(
-    supabase,
-    calendarOccurrenceRows.map((occurrence) => ({
-      accountBrandfetchIconUrl: occurrence.financial_items?.counterparty_id
-        ? accountById.get(occurrence.financial_items.counterparty_id)
-            ?.brandfetchIconUrl ?? null
-        : null,
-      accountIconPath: occurrence.financial_items?.counterparty_id
-        ? accountById.get(occurrence.financial_items.counterparty_id)
-            ?.iconPath ?? null
-        : null,
-      planBrandfetchIconUrl: occurrence.financial_items?.brandfetch_icon_url ?? null,
-      planIconPath: occurrence.financial_items?.icon_storage_path ?? null,
-      title: occurrence.financial_items?.name ?? "Untitled"
-    }))
-  );
-  const iconByOccurrenceId = new Map(
-    calendarOccurrenceRows.map((occurrence, index) => [
-      occurrence.id,
-      calendarEventIcons[index]
-    ])
-  );
-  const summary = summarizeOccurrences(visibleOccurrenceRows);
+  const summary = summarizeOccurrences(calendarOccurrenceRows);
   const completedActivityMinor = summarizeCompletedActivity(
     balanceAnchorRecordedAt
       ? ((payments ?? []) as DashboardPayment[]).filter(
@@ -168,18 +152,17 @@ export default async function DashboardPage({
       ? null
       : balanceAnchorAmountMinor + completedActivityMinor;
   const weeklyGroups = buildWeeklyOccurrenceGroups(
-    visibleOccurrenceRows,
+    calendarOccurrenceRows,
     ((projectionOccurrences ?? []) as DashboardOccurrence[]).filter(
       (occurrence) => occurrence.due_date <= calendarFrame.visibleEnd
     ),
     weekStartsOn,
     adjustedCurrentBalanceMinor,
-    selectedDay
+    null
   );
   const calendar = fillCalendarCounts(
     calendarFrame,
-    calendarOccurrenceRows,
-    iconByOccurrenceId
+    calendarOccurrenceRows
   );
   const nextCalendarFrame = buildCalendarFrame(calendarFrame.nextMonth, weekStartsOn);
   const nextMonthPrefetchEnd =
@@ -188,143 +171,197 @@ export default async function DashboardPage({
   return (
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
       <DashboardPrefetch visibleEnd={nextMonthPrefetchEnd} />
-      <div className="mx-auto grid max-w-5xl gap-6">
+      <div className="mx-auto grid w-full max-w-[108rem] gap-5">
         <header className="border-b border-line pb-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
+          <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div>
+              <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
+              <p className="text-sm font-medium text-gray-700">
+                {calendarFrame.label}
+              </p>
+            </div>
+            <Link
+              className="inline-flex min-h-10 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold text-ink"
+              href={buildNewEventHref(selectedMonth, selectedDay, selectedView)}
+            >
+              New event
+            </Link>
           </div>
         </header>
 
-        <section className="grid gap-3 rounded border border-line bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,auto)] md:items-end">
-          <form action={updateBalanceAnchorAction} className="grid gap-2">
-            <input name="month" type="hidden" value={selectedMonth} />
-            <label className="grid gap-1 text-sm font-medium text-ink">
-              Current checking balance
-              <span className="grid min-h-12 grid-cols-[1fr_auto] overflow-hidden rounded border border-line bg-white">
-                <input
-                  className="min-w-0 border-0 bg-transparent px-3 text-base outline-none"
-                  name="balance"
-                  inputMode="decimal"
-                  placeholder="1250.00"
-                  defaultValue={
-                    balanceAnchorAmountMinor === null
-                      ? ""
-                      : formatMinorAmountForInput(balanceAnchorAmountMinor)
-                  }
-                />
-                <span className="flex items-center border-l border-line bg-paper px-3 text-sm font-semibold text-gray-700">
-                  {defaultCurrencyCode}
-                </span>
-              </span>
-            </label>
-            <button className="min-h-10 rounded bg-mint px-3 text-sm font-semibold text-white sm:max-w-40">
-              Save balance
-            </button>
-          </form>
-          <div className="rounded border border-line bg-paper p-4">
-            <p className="text-sm text-gray-700">Available balance</p>
-            <p className="mt-2 text-2xl font-semibold text-ink">
-              {adjustedCurrentBalanceMinor === null
-                ? "Not set"
-                : formatMinorAmount(
-                    adjustedCurrentBalanceMinor,
-                    defaultCurrencyCode
-                  )}
-            </p>
-            <p className="mt-1 text-sm text-gray-700">
-              {balanceAnchorRecordedAt
-                ? `Updated ${formatTimestampLabel(balanceAnchorRecordedAt)}`
-                : "Enter a balance to start projections."}
-            </p>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-2 gap-3 rounded border border-line bg-white p-4">
-          <ProjectionMetric
-            label="Projected incoming"
-            value={formatMinorAmount(summary.incomingMinor, defaultCurrencyCode)}
-          />
-          <ProjectionMetric
-            label="Projected outgoing"
-            value={formatMinorAmount(summary.outgoingMinor, defaultCurrencyCode)}
-          />
-        </section>
-
-        {summary.unknownCount > 0 ? (
-          <section className="rounded border border-danger/30 bg-white p-4 text-danger">
-            <p className="text-sm font-semibold">Unknown amounts</p>
-            <p className="mt-1 text-sm leading-6">
-              {summary.unknownCount} visible{" "}
-              {summary.unknownCount === 1 ? "event has" : "events have"} an
-              unknown amount and are not included in projected totals.
-            </p>
-          </section>
-        ) : null}
-
-        <CalendarNavigation
-          calendar={calendar}
-          selectedDay={selectedDay}
-          selectedMonth={selectedMonth}
-          themeToken={themeToken}
-          today={today}
-        />
-
-        <section className="grid gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-ink">Activity in view</h2>
-              {selectedDay ? (
-                <p className="text-sm text-gray-700">
-                  {formatSelectedDayLabel(selectedDay)}
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(36rem,42rem)] xl:items-start">
+          <section className="order-1 grid gap-4 xl:col-start-1 xl:row-start-1">
+            <section className="grid gap-4 rounded border border-line bg-white p-4 lg:grid-cols-[minmax(18rem,1.25fr)_repeat(3,minmax(0,1fr))] lg:items-end">
+              <form action={updateBalanceAnchorAction} className="grid gap-2">
+                <input name="month" type="hidden" value={selectedMonth} />
+                <label className="grid gap-1 text-sm font-medium text-ink">
+                  Current checking balance
+                  <span className="grid min-h-12 grid-cols-[1fr_auto] overflow-hidden rounded border border-line bg-white">
+                    <input
+                      className="min-w-0 border-0 bg-transparent px-3 text-base outline-none"
+                      name="balance"
+                      inputMode="decimal"
+                      placeholder="1250.00"
+                      defaultValue={
+                        balanceAnchorAmountMinor === null
+                          ? ""
+                          : formatMinorAmountForInput(balanceAnchorAmountMinor)
+                      }
+                    />
+                    <span className="flex items-center border-l border-line bg-paper px-3 text-sm font-semibold text-gray-700">
+                      {defaultCurrencyCode}
+                    </span>
+                  </span>
+                </label>
+                <button className="min-h-10 rounded bg-mint px-3 text-sm font-semibold text-white sm:max-w-40">
+                  Save balance
+                </button>
+              </form>
+              <div className="grid min-w-0 gap-1 rounded border border-line bg-paper p-3">
+                <p className="text-sm text-gray-700">Available balance</p>
+                <p className="truncate text-lg font-semibold text-ink sm:text-xl">
+                  {adjustedCurrentBalanceMinor === null
+                    ? "Not set"
+                    : formatMinorAmount(
+                        adjustedCurrentBalanceMinor,
+                        defaultCurrencyCode
+                      )}
                 </p>
-              ) : null}
-            </div>
-          </div>
+                <p className="truncate text-xs text-gray-700">
+                  {balanceAnchorRecordedAt
+                    ? `Updated ${formatTimestampLabel(balanceAnchorRecordedAt)}`
+                    : "Set balance to start projections"}
+                </p>
+              </div>
+              <ProjectionMetric
+                label="Projected incoming"
+                value={formatMinorAmount(summary.incomingMinor, defaultCurrencyCode)}
+              />
+              <ProjectionMetric
+                label="Projected outgoing"
+                value={formatMinorAmount(summary.outgoingMinor, defaultCurrencyCode)}
+              />
+            </section>
 
-          {error ? (
-            <p className="rounded border border-danger/30 bg-white p-4 text-sm text-danger">
-              Unable to load activity right now.
-            </p>
-          ) : null}
+            {summary.unknownCount > 0 ? (
+              <section className="rounded border border-danger/30 bg-white p-4 text-danger">
+                <p className="text-sm font-semibold">Unknown amounts</p>
+                <p className="mt-1 text-sm leading-6">
+                  {summary.unknownCount} visible{" "}
+                  {summary.unknownCount === 1 ? "event has" : "events have"} an
+                  unknown amount and are not included in projected totals.
+                </p>
+              </section>
+            ) : null}
 
-          {!error && visibleOccurrenceRows.length === 0 ? (
-            <div className="rounded border border-line bg-white p-5">
-              <p className="font-medium text-ink">No activity in this calendar view.</p>
-              <p className="mt-1 text-sm leading-6 text-gray-700">
-                Create a plan or move to another month to find scheduled activity.
-              </p>
-              <Link
-                className="mt-4 inline-flex min-h-11 items-center rounded bg-mint px-4 text-sm font-semibold text-white"
-                href={buildNewEventHref(selectedMonth, selectedDay)}
-              >
-                New
-              </Link>
-            </div>
-          ) : null}
+          </section>
 
-          <div className="grid gap-5">
-            {weeklyGroups.map((week) => (
-              <section
-                className="grid gap-3 border-t border-line pt-5 first:border-t-0 first:pt-0"
-                key={`${week.weekStart}-${week.weekEnd}`}
-              >
-                <div>
-                  <h3 className="font-semibold text-ink">
-                    {formatWeekRange(week.weekStart, week.weekEnd)}
-                  </h3>
-                  <p className="text-sm text-gray-700">
-                    {week.occurrences.length} scheduled{" "}
-                    {week.occurrences.length === 1 ? "event" : "events"}
-                  </p>
+          <aside className="order-2 grid gap-4 xl:sticky xl:top-4 xl:col-start-2 xl:row-span-2 xl:row-start-1">
+            <CalendarNavigation
+              calendar={calendar}
+              selectedDay={selectedDay}
+              selectedMonth={selectedMonth}
+              themeToken={themeToken}
+              today={today}
+              view={selectedView}
+            />
+            <DayEventsPanel
+              accountById={accountById}
+              date={dayPanelDate}
+              occurrences={dayPanelOccurrenceRows}
+              returnTo={buildDashboardHref(
+                selectedMonth,
+                selectedDay ?? undefined,
+                selectedView
+              )}
+              selectedDay={Boolean(selectedDay)}
+              today={today}
+            />
+          </aside>
+
+          <section className="order-3 grid gap-4 xl:col-start-1 xl:row-start-2">
+              <section className="grid gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-ink">Upcoming</h2>
+                    <p className="text-sm text-gray-700">{calendarFrame.label}</p>
+                  </div>
                 </div>
 
-                {week.occurrences.map((occurrence) => {
-                  const icon = iconByOccurrenceId.get(occurrence.id) ?? {
-                    alt: `${occurrence.financial_items?.name ?? "Untitled"} icon`,
-                    brandfetchUrl: null,
-                    initials: "?",
-                    signedUrl: null
-                  };
+                {error ? (
+                  <p className="rounded border border-danger/30 bg-white p-4 text-sm text-danger">
+                    Unable to load activity right now.
+                  </p>
+                ) : null}
+
+                {!error && calendarOccurrenceRows.length === 0 ? (
+                  <div className="rounded border border-line bg-white p-5">
+                    <p className="font-medium text-ink">
+                      No activity in this calendar view.
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-gray-700">
+                      Create a plan or move to another month to find scheduled activity.
+                    </p>
+                    <Link
+                      className="mt-4 inline-flex min-h-11 items-center rounded bg-mint px-4 text-sm font-semibold text-white"
+                      href={buildNewEventHref(
+                        selectedMonth,
+                        selectedDay,
+                        selectedView
+                      )}
+                    >
+                      New
+                    </Link>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4">
+                  {weeklyGroups.map((week) => (
+                    <section
+                      className="grid gap-3 rounded border border-line bg-white p-4 shadow-sm shadow-black/5"
+                      key={`${week.weekStart}-${week.weekEnd}`}
+                    >
+                      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                        <div>
+                          <h3 className="font-semibold text-ink">
+                            Week ending {formatShortDate(week.weekEnd)}
+                          </h3>
+                          <p className="text-xs text-gray-700 sm:text-sm">
+                            {formatWeekRange(week.weekStart, week.weekEnd)} ·{" "}
+                            {week.occurrences.length} scheduled{" "}
+                            {week.occurrences.length === 1 ? "event" : "events"}
+                          </p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[auto_auto] sm:items-center">
+                          <div className="rounded border border-line bg-paper px-3 py-2 sm:text-right">
+                            <p className="text-xs font-medium text-gray-700">
+                              Net change
+                            </p>
+                            <p className="whitespace-nowrap text-sm font-semibold text-ink">
+                              {formatDelta(
+                                week.projectedDeltaMinor,
+                                defaultCurrencyCode
+                              )}
+                            </p>
+                          </div>
+                          <div className="rounded border border-mint/30 bg-mint/10 px-3 py-2 sm:text-right">
+                            <p className="text-xs font-semibold text-mint">
+                              Week-ending projected balance
+                            </p>
+                            <p className="whitespace-nowrap text-lg font-semibold text-ink">
+                              {week.endingBalanceMinor === null
+                                ? "Set balance"
+                                : formatMinorAmount(
+                                    week.endingBalanceMinor,
+                                    defaultCurrencyCode
+                                  )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2">
+                        {week.occurrences.map((occurrence) => {
                   const amountLabel =
                     occurrence.amount_status === "unknown"
                       ? "Unknown"
@@ -337,7 +374,8 @@ export default async function DashboardPage({
                     : null;
                   const returnTo = buildDashboardHref(
                     selectedMonth,
-                    selectedDay ?? undefined
+                    selectedDay ?? undefined,
+                    selectedView
                   );
                   const leadingAction =
                     occurrence.lifecycle_status === "upcoming" &&
@@ -364,106 +402,77 @@ export default async function DashboardPage({
                         )
                       : null;
 
-                  return (
-                    <SwipeableEventCard
-                      key={occurrence.id}
-                      leadingAction={leadingAction}
-                      trailingAction={
-                        <form action={archiveOccurrenceAction}>
-                          <input name="id" type="hidden" value={occurrence.id} />
-                          <input name="returnTo" type="hidden" value={returnTo} />
-                          <button className="swipe-delete-action" type="submit">
-                            Delete
-                          </button>
-                        </form>
-                      }
-                    >
-                      <article
-                        className="relative grid gap-2 p-3 pr-14 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-                        style={entryAccentStyle(
-                          occurrence.financial_items?.color_token,
-                          themeToken
-                        )}
-                      >
-                        <Link
-                          aria-label={`Edit ${occurrence.financial_items?.name ?? "event"}`}
-                          className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded border border-line bg-white text-ink"
-                          href={buildEditEventHref(occurrence.id, returnTo)}
-                          title="Edit"
-                        >
-                          <PencilIcon />
-                        </Link>
-                        <div className="flex min-w-0 gap-3">
-                          <EntityIcon icon={icon} size="lg" />
-                          <div className="grid min-w-0 content-center gap-2">
-                            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-gray-700">
-                              <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
-                                {formatWeekday(occurrence.due_date)}
-                              </span>
-                              <span>{formatEventDate(occurrence.due_date)}</span>
-                              {account ? <span>- {account.name}</span> : null}
-                            </div>
-                            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                              <h3 className="truncate font-semibold text-ink">
-                                {occurrence.financial_items?.name ?? "Untitled"}
-                              </h3>
-                              <span className="rounded border border-line px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-gray-700">
-                                {occurrence.financial_items?.kind ?? "item"}
-                              </span>
-                              {isOverdue(occurrence, today) ? (
-                                <span className="rounded border border-danger/30 px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-danger">
-                                  overdue
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid gap-2 sm:min-w-36 sm:text-right">
-                          <p className="text-base font-semibold text-ink">
-                            {amountLabel}
-                          </p>
-                        </div>
-                      </article>
-                    </SwipeableEventCard>
-                  );
-                })}
-
-                <div className="grid gap-1 rounded border border-mint/20 bg-mint/10 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                  <p className="text-sm font-medium text-gray-700">
-                    Weekly projected change:{" "}
-                    <span className="text-ink">
-                      {formatDelta(week.projectedDeltaMinor, defaultCurrencyCode)}
-                    </span>
-                  </p>
-                  <div className="sm:text-right">
-                    <p className="text-sm text-gray-700">
-                      {selectedDay
-                        ? "Projected selected-day balance"
-                        : "Projected week-end balance"}
-                    </p>
-                    <p className="text-xl font-semibold text-ink">
-                      {week.endingBalanceMinor === null
-                        ? "Set balance"
-                        : formatMinorAmount(
-                            week.endingBalanceMinor,
-                            defaultCurrencyCode
-                          )}
-                    </p>
-                  </div>
+                          return (
+                            <SwipeableEventCard
+                              key={occurrence.id}
+                              leadingAction={leadingAction}
+                              trailingAction={
+                                <form action={archiveOccurrenceAction}>
+                                  <input name="id" type="hidden" value={occurrence.id} />
+                                  <input name="returnTo" type="hidden" value={returnTo} />
+                                  <button className="swipe-delete-action" type="submit">
+                                    Delete
+                                  </button>
+                                </form>
+                              }
+                            >
+                              <Link
+                                aria-label={`Edit ${occurrence.financial_items?.name ?? "event"}`}
+                                className="grid min-w-0 grid-cols-[3.25rem_minmax(0,1fr)_minmax(4.75rem,auto)] items-center gap-2 rounded border border-line bg-paper p-2.5 sm:grid-cols-[3.5rem_minmax(0,1fr)_minmax(7rem,auto)] sm:gap-3 sm:p-3"
+                                href={buildEditEventHref(occurrence.id, returnTo)}
+                                style={entryAccentStyle(
+                                  occurrence.financial_items?.color_token,
+                                  themeToken
+                                )}
+                              >
+                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded border border-line bg-white sm:h-12 sm:w-12">
+                                  <span className="text-[0.6875rem] font-semibold uppercase leading-none text-gray-700">
+                                    {formatWeekday(occurrence.due_date)}
+                                  </span>
+                                  <span className="text-base font-semibold leading-none text-ink">
+                                    {formatDayOfMonth(occurrence.due_date)}
+                                  </span>
+                                </div>
+                                <div className="grid min-w-0 gap-1">
+                                  <h3 className="truncate font-semibold text-ink">
+                                    {occurrence.financial_items?.name ?? "Untitled"}
+                                  </h3>
+                                  <p className="truncate text-xs text-gray-700 sm:text-sm">
+                                    {[
+                                      account?.name,
+                                      occurrence.financial_items?.kind ?? "item"
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </p>
+                                </div>
+                                <div className="grid min-w-0 justify-items-end gap-1 text-right">
+                                  <p className="whitespace-nowrap text-sm font-semibold text-ink sm:text-base">
+                                    {amountLabel}
+                                  </p>
+                                  <div className="grid justify-items-end gap-1 sm:flex sm:justify-end">
+                                    <span className="rounded border border-line bg-white px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase text-gray-700 sm:px-2 sm:text-[0.6875rem]">
+                                      {occurrence.amount_status}
+                                    </span>
+                                    {isOverdue(occurrence, today) ? (
+                                      <span className="rounded border border-danger/30 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase text-danger sm:px-2 sm:text-[0.6875rem]">
+                                        Overdue
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </Link>
+                            </SwipeableEventCard>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               </section>
-            ))}
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
-      <Link
-        aria-label="New event"
-        className="fixed bottom-5 right-5 z-20 inline-flex h-14 w-14 items-center justify-center rounded-full bg-mint text-white shadow-lg shadow-black/20"
-        href={buildNewEventHref(selectedMonth, selectedDay)}
-        title="New event"
-      >
-        <PencilIcon />
-      </Link>
     </main>
   );
 }
@@ -479,7 +488,7 @@ function entryAccentStyle(
   }
 
   return {
-    borderLeft: `6px solid ${color.background}`
+    borderLeft: `4px solid ${color.background}`
   };
 }
 
@@ -494,21 +503,100 @@ function ProjectionMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PencilIcon() {
+function DayEventsPanel({
+  accountById,
+  date,
+  occurrences,
+  returnTo,
+  selectedDay,
+  today
+}: {
+  accountById: Map<string, { name: string }>;
+  date: string;
+  occurrences: DashboardOccurrence[];
+  returnTo: Route;
+  selectedDay: boolean;
+  today: string;
+}) {
   return (
-    <svg
-      aria-hidden="true"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
+    <section className="grid gap-3 rounded border border-line bg-white p-4 lg:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-ink">{formatSelectedDayLabel(date)}</h2>
+          <p className="text-sm text-gray-700">
+            {selectedDay ? "Selected day" : "Today"}
+          </p>
+        </div>
+        <p className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-gray-700">
+          {occurrences.length} {occurrences.length === 1 ? "event" : "events"}
+        </p>
+      </div>
+
+      <div className="grid gap-2">
+        {occurrences.length === 0 ? (
+          <p className="rounded border border-line bg-paper p-3 text-sm text-gray-700">
+            No events scheduled for this day.
+          </p>
+        ) : null}
+
+        {occurrences.map((occurrence) => {
+          const account = occurrence.financial_items?.counterparty_id
+            ? accountById.get(occurrence.financial_items.counterparty_id)
+            : null;
+          const amountLabel =
+            occurrence.amount_status === "unknown"
+              ? "Unknown"
+              : formatMinorAmount(
+                  occurrence.expected_amount_minor ?? 0,
+                  occurrence.currency_code
+                );
+
+          return (
+            <Link
+              className="grid gap-1 rounded border border-line bg-paper p-3 transition-colors hover:border-mint/50"
+              href={buildEditEventHref(occurrence.id, returnTo)}
+              key={occurrence.id}
+            >
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-ink">
+                    {occurrence.financial_items?.name ?? "Untitled"}
+                  </p>
+                  <p className="truncate text-sm text-gray-700">
+                    {[
+                      account?.name,
+                      occurrence.financial_items?.kind ?? "item"
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+                <p className="whitespace-nowrap text-sm font-semibold text-ink">
+                  {amountLabel}
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-end gap-1">
+                <span className="rounded border border-line bg-white px-2 py-0.5 text-[0.6875rem] font-semibold uppercase text-gray-700">
+                  {occurrence.amount_status}
+                </span>
+                {isOverdue(occurrence, today) ? (
+                  <span className="rounded border border-danger/30 px-2 py-0.5 text-[0.6875rem] font-semibold uppercase text-danger">
+                    Overdue
+                  </span>
+                ) : null}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <Link
+        className="justify-self-center text-sm font-semibold text-mint"
+        href={buildDashboardHref(date.slice(0, 7), date, "calendar")}
+      >
+        View day on calendar
+      </Link>
+    </section>
   );
 }
 
@@ -636,19 +724,17 @@ function formatShortDate(date: string) {
   }).format(parseDateOnly(date));
 }
 
-function formatEventDate(date: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric"
-  }).format(parseDateOnly(date));
-}
-
 function formatWeekday(date: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
     weekday: "short"
+  }).format(parseDateOnly(date));
+}
+
+function formatDayOfMonth(date: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    timeZone: "UTC"
   }).format(parseDateOnly(date));
 }
 
@@ -745,8 +831,7 @@ function expandCalendarFrameBounds(calendarFrame: ReturnType<typeof buildCalenda
 
 function fillCalendarCounts(
   calendar: ReturnType<typeof buildCalendarFrame>,
-  occurrences: DashboardOccurrence[],
-  iconByOccurrenceId: Map<string, Awaited<ReturnType<typeof resolveEntityIcons>>[number] | undefined>
+  occurrences: DashboardOccurrence[]
 ) {
   const occurrencesByDate = occurrences.reduce<
     Record<
@@ -754,7 +839,6 @@ function fillCalendarCounts(
       Array<{
         amountLabel: string;
         colorToken: string;
-        icon: Awaited<ReturnType<typeof resolveEntityIcons>>[number] | undefined;
         title: string;
       }>
     >
@@ -772,7 +856,6 @@ function fillCalendarCounts(
                   occurrence.currency_code
                 ),
           colorToken: occurrence.financial_items?.color_token ?? "",
-          icon: iconByOccurrenceId.get(occurrence.id),
           title: occurrence.financial_items?.name ?? "Untitled"
         }
       ];
@@ -814,19 +897,30 @@ function normalizeDayParam(day: string | undefined, selectedMonth: string) {
   return day.slice(0, 7) === selectedMonth ? day : null;
 }
 
-function buildDashboardHref(month: string, day?: string) {
+function buildDashboardHref(
+  month: string,
+  day?: string,
+  view: "calendar" | "list" = "list"
+) {
   const params = new URLSearchParams({ month });
 
   if (day) {
     params.set("day", day);
   }
+  if (view === "calendar") {
+    params.set("view", view);
+  }
 
   return `/dashboard?${params.toString()}` as Route;
 }
 
-function buildNewEventHref(month: string, day: string | null) {
+function buildNewEventHref(
+  month: string,
+  day: string | null,
+  view: "calendar" | "list" = "list"
+) {
   return `/events/new?returnTo=${encodeURIComponent(
-    buildDashboardHref(month, day ?? undefined)
+    buildDashboardHref(month, day ?? undefined, view)
   )}` as Route;
 }
 
