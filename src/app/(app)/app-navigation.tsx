@@ -5,7 +5,12 @@ import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-type NavIconName = "accounts" | "dashboard" | "events" | "settings";
+type NavIconName =
+  | "accounts"
+  | "dashboard"
+  | "events"
+  | "profile"
+  | "settings";
 
 const navItems: Array<{ href: Route; icon: NavIconName; label: string }> = [
   { href: "/dashboard", icon: "dashboard", label: "Dashboard" },
@@ -58,7 +63,7 @@ export function AppNavigation({
             />
           </Link>
 
-          <div className="user-menu">
+          <div className="user-menu header-user-menu">
             <button
               aria-expanded={userMenuOpen}
               aria-label="Open user menu"
@@ -102,6 +107,33 @@ export function AppNavigation({
               </Link>
             ))}
           </nav>
+          <div className="user-menu sidebar-user-menu">
+            <button
+              aria-expanded={userMenuOpen}
+              aria-label="Open user menu"
+              className="sidebar-user-button"
+              type="button"
+              onClick={() => {
+                setUserMenuOpen((open) => !open);
+              }}
+            >
+              <NavIcon name="profile" />
+              <span className="sidebar-user-label">Profile</span>
+            </button>
+            {userMenuOpen ? (
+              <div className="user-menu-panel sidebar-user-menu-panel">
+                <p className="truncate px-3 py-2 text-xs font-medium text-gray-700">
+                  {email}
+                </p>
+                <Link href="/settings" onClick={closeMenus}>
+                  Settings
+                </Link>
+                <form action="/logout" method="post">
+                  <button>Log out</button>
+                </form>
+              </div>
+            ) : null}
+          </div>
         </aside>
         <div className="app-page-content">{children}</div>
       </div>
@@ -176,6 +208,23 @@ function NavIcon({ name }: { name: NavIconName }) {
       >
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
         <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1 .6l-.08.08a2 2 0 0 1-3.42-1.42v-.07A1.8 1.8 0 0 0 9 17.1a1.8 1.8 0 0 0-1.98.36l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.8 1.8 0 0 0 4.6 13a1.8 1.8 0 0 0-.6-1l-.08-.08A2 2 0 0 1 5.34 8.5h.07A1.8 1.8 0 0 0 6.9 7a1.8 1.8 0 0 0-.36-1.98l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05A1.8 1.8 0 0 0 11 2.6a1.8 1.8 0 0 0 1-.6l.08-.08A2 2 0 0 1 15.5 3.34v.07A1.8 1.8 0 0 0 17.1 4.9a1.8 1.8 0 0 0 1.98-.36l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05A1.8 1.8 0 0 0 21.4 9c0 .4.13.77.36 1.07l.05.06a2 2 0 0 1-1.42 3.42h-.07A1.8 1.8 0 0 0 19.4 15Z" />
+      </svg>
+    );
+  }
+
+  if (name === "profile") {
+    return (
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        viewBox="0 0 24 24"
+      >
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
       </svg>
     );
   }

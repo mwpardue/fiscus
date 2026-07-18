@@ -40,7 +40,7 @@ export const runtime = "edge";
 export default async function DashboardPage({
   searchParams
 }: {
-  searchParams?: Promise<{ day?: string; month?: string; view?: string }>;
+  searchParams?: Promise<{ day?: string; month?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();
@@ -53,7 +53,6 @@ export default async function DashboardPage({
   const params = await searchParams;
   const selectedMonth = normalizeMonthParam(params?.month, today);
   const selectedDay = normalizeDayParam(params?.day, selectedMonth);
-  const selectedView = params?.view === "calendar" ? "calendar" : "list";
   const provisionalCalendarFrame = buildCalendarFrame(selectedMonth, 0);
   const provisionalQueryBounds = expandCalendarFrameBounds(provisionalCalendarFrame);
   const queryBounds = {
@@ -70,7 +69,6 @@ export default async function DashboardPage({
   const [
     { data: profile },
     { data: occurrences, error },
-    { data: projectionOccurrences },
     { data: payments },
     { data: counterparties }
   ] = await Promise.all([
@@ -90,17 +88,6 @@ export default async function DashboardPage({
       .is("archived_at", null)
       .eq("lifecycle_status", "upcoming")
       .gte("due_date", queryBounds.visibleStart)
-      .lte("due_date", queryBounds.visibleEnd)
-      .order("due_date", { ascending: true }),
-    supabase
-      .from("occurrences")
-      .select(
-        "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id)"
-      )
-      .eq("user_id", user.id)
-      .is("archived_at", null)
-      .eq("lifecycle_status", "upcoming")
-      .gte("due_date", today)
       .lte("due_date", queryBounds.visibleEnd)
       .order("due_date", { ascending: true }),
     supabase
@@ -125,6 +112,11 @@ export default async function DashboardPage({
   const calendarOccurrenceRows = ((occurrences ?? []) as DashboardOccurrence[]).filter(
     (occurrence) =>
       occurrence.due_date >= calendarFrame.visibleStart &&
+      occurrence.due_date <= calendarFrame.visibleEnd
+  );
+  const projectionOccurrenceRows = ((occurrences ?? []) as DashboardOccurrence[]).filter(
+    (occurrence) =>
+      occurrence.due_date >= today &&
       occurrence.due_date <= calendarFrame.visibleEnd
   );
   const dayPanelDate = selectedDay ?? today;
@@ -153,9 +145,7 @@ export default async function DashboardPage({
       : balanceAnchorAmountMinor + completedActivityMinor;
   const weeklyGroups = buildWeeklyOccurrenceGroups(
     calendarOccurrenceRows,
-    ((projectionOccurrences ?? []) as DashboardOccurrence[]).filter(
-      (occurrence) => occurrence.due_date <= calendarFrame.visibleEnd
-    ),
+    projectionOccurrenceRows,
     weekStartsOn,
     adjustedCurrentBalanceMinor,
     null
@@ -182,7 +172,7 @@ export default async function DashboardPage({
             </div>
             <Link
               className="inline-flex min-h-10 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold text-ink"
-              href={buildNewEventHref(selectedMonth, selectedDay, selectedView)}
+              href={buildNewEventHref(selectedMonth, selectedDay)}
             >
               New event
             </Link>
@@ -263,7 +253,6 @@ export default async function DashboardPage({
               selectedMonth={selectedMonth}
               themeToken={themeToken}
               today={today}
-              view={selectedView}
             />
             <DayEventsPanel
               accountById={accountById}
@@ -271,8 +260,7 @@ export default async function DashboardPage({
               occurrences={dayPanelOccurrenceRows}
               returnTo={buildDashboardHref(
                 selectedMonth,
-                selectedDay ?? undefined,
-                selectedView
+                selectedDay ?? undefined
               )}
               selectedDay={Boolean(selectedDay)}
               today={today}
@@ -306,8 +294,7 @@ export default async function DashboardPage({
                       className="mt-4 inline-flex min-h-11 items-center rounded bg-mint px-4 text-sm font-semibold text-white"
                       href={buildNewEventHref(
                         selectedMonth,
-                        selectedDay,
-                        selectedView
+                        selectedDay
                       )}
                     >
                       New
@@ -374,8 +361,7 @@ export default async function DashboardPage({
                     : null;
                   const returnTo = buildDashboardHref(
                     selectedMonth,
-                    selectedDay ?? undefined,
-                    selectedView
+                    selectedDay ?? undefined
                   );
                   const leadingAction =
                     occurrence.lifecycle_status === "upcoming" &&
@@ -592,7 +578,7 @@ function DayEventsPanel({
 
       <Link
         className="justify-self-center text-sm font-semibold text-mint"
-        href={buildDashboardHref(date.slice(0, 7), date, "calendar")}
+        href={buildDashboardHref(date.slice(0, 7), date)}
       >
         View day on calendar
       </Link>
@@ -897,30 +883,19 @@ function normalizeDayParam(day: string | undefined, selectedMonth: string) {
   return day.slice(0, 7) === selectedMonth ? day : null;
 }
 
-function buildDashboardHref(
-  month: string,
-  day?: string,
-  view: "calendar" | "list" = "list"
-) {
+function buildDashboardHref(month: string, day?: string) {
   const params = new URLSearchParams({ month });
 
   if (day) {
     params.set("day", day);
   }
-  if (view === "calendar") {
-    params.set("view", view);
-  }
 
   return `/dashboard?${params.toString()}` as Route;
 }
 
-function buildNewEventHref(
-  month: string,
-  day: string | null,
-  view: "calendar" | "list" = "list"
-) {
+function buildNewEventHref(month: string, day: string | null) {
   return `/events/new?returnTo=${encodeURIComponent(
-    buildDashboardHref(month, day ?? undefined, view)
+    buildDashboardHref(month, day ?? undefined)
   )}` as Route;
 }
 

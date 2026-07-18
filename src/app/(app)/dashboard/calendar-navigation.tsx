@@ -30,15 +30,13 @@ export function CalendarNavigation({
   selectedDay,
   selectedMonth,
   themeToken,
-  today,
-  view
+  today
 }: {
   calendar: DashboardCalendar;
   selectedDay: string | null;
   selectedMonth: string;
   themeToken: string;
   today: string;
-  view?: "calendar" | "list";
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -49,9 +47,6 @@ export function CalendarNavigation({
 
     if (day) {
       params.set("day", day);
-    }
-    if (view === "calendar") {
-      params.set("view", view);
     }
 
     startTransition(() => {
