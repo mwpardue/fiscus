@@ -424,6 +424,46 @@ input,
 select,
 textarea {
   font: inherit;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+  select {
+    box-sizing: border-box;
+    height: 2.75rem;
+    line-height: 1.25rem;
+  }
+
+  input[type="date"] {
+    appearance: none;
+    display: block;
+    line-height: 2.75rem;
+    overflow: hidden;
+    padding-bottom: 0;
+    padding-top: 0;
+    width: 100%;
+    -webkit-appearance: none;
+  }
+
+  input[type="date"]::-webkit-date-and-time-value {
+    align-items: center;
+    display: flex;
+    height: 2.75rem;
+    line-height: 2.75rem;
+    margin: 0;
+    max-width: 100%;
+    text-align: left;
+  }
+
+  input[type="date"]::-webkit-datetime-edit {
+    align-items: center;
+    display: flex;
+    height: 2.75rem;
+    line-height: 2.75rem;
+    padding: 0;
+  }
 }
 
 code,

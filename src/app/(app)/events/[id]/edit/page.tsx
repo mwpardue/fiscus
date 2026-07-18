@@ -2,6 +2,14 @@ import { notFound, redirect } from "next/navigation";
 import { BackLink } from "@/app/(app)/back-link";
 import { EntityIcon } from "@/app/(app)/entity-icon";
 import { ColorTagPicker } from "@/app/(app)/entries/color-tag-picker";
+import {
+  AmountStatusPicker,
+  CurrencyAmountField,
+  EventFormSection,
+  dateFieldControlClass,
+  fieldControlClass,
+  primaryActionClass
+} from "@/app/(app)/entries/event-form-ui";
 import { DEFAULT_THEME_TOKEN } from "@/lib/color-tags";
 import { resolveEntityIcons } from "@/lib/entity-icons";
 import { formatMinorAmountForInput } from "@/lib/money";
@@ -123,7 +131,7 @@ export default async function EditEventPage({
 
   return (
     <main className="min-h-screen overflow-x-hidden px-3 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto grid w-full max-w-2xl gap-6">
+      <div className="mx-auto grid w-full max-w-3xl gap-5">
         <header className="grid gap-3 border-b border-line pb-4">
           <div>
             <BackLink fallbackHref="/events" href={returnTo} />
@@ -143,31 +151,39 @@ export default async function EditEventPage({
           </p>
         ) : null}
 
-        <section className="mobile-action-surface grid gap-6 rounded border border-line bg-white p-4 sm:p-5">
-          <div className="flex items-center gap-3 rounded border border-line bg-paper p-3">
-            <EntityIcon icon={eventIcon} />
-            <div>
-              <p className="text-sm font-semibold text-ink">{entry.name}</p>
-              <p className="text-sm text-gray-700">
-                {entry.kind} · {occurrence.lifecycle_status}
-              </p>
+        <section className="grid gap-4">
+          <div className="grid min-w-0 gap-4 rounded border border-line bg-paper p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <EntityIcon icon={eventIcon} size="lg" />
+              <div className="min-w-0">
+                <p className="truncate text-lg font-semibold text-ink">
+                  {entry.name}
+                </p>
+                <p className="text-sm text-gray-700">
+                  {entry.kind} · {occurrence.lifecycle_status}
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-1 text-sm text-gray-700 sm:text-right">
+              <span>{formatWeekday(occurrence.due_date)}</span>
+              <span className="font-semibold text-ink">
+                {formatDisplayDate(occurrence.due_date)}
+              </span>
             </div>
           </div>
 
-          <form action={updateOccurrenceAction} className="grid gap-5">
+          <form action={updateOccurrenceAction}>
             <input name="id" type="hidden" value={occurrence.id} />
             <input name="returnTo" type="hidden" value={returnTo ?? ""} />
-            <div>
-              <h2 className="text-sm font-semibold text-ink">This event</h2>
-              <p className="mt-1 text-sm text-gray-700">
-                These changes apply only to this scheduled event.
-              </p>
-            </div>
+            <EventFormSection
+              description="These changes apply only to this scheduled event."
+              title="Event occurrence"
+            >
 
             <label className="grid gap-2 text-sm font-medium text-ink">
               Due date
               <input
-                className="min-h-12 rounded border border-line bg-white px-3 text-base disabled:bg-paper"
+                className={`${dateFieldControlClass} disabled:bg-paper`}
                 name="dueDate"
                 type="date"
                 defaultValue={occurrence.due_date}
@@ -176,58 +192,27 @@ export default async function EditEventPage({
               />
             </label>
 
-            <fieldset className="grid gap-3">
-              <legend className="text-sm font-semibold text-ink">
-                Amount status
-              </legend>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {(["fixed", "estimated", "unknown"] as const).map((status) => (
-                  <label
-                    className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium"
-                    key={status}
-                  >
-                    <input
-                      className="mr-2"
-                      type="radio"
-                      name="amountStatus"
-                      value={status}
-                      defaultChecked={occurrence.amount_status === status}
-                      disabled={!isUpcoming}
-                    />
-                    {status[0].toUpperCase()}
-                    {status.slice(1)}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <AmountStatusPicker
+              defaultStatus={occurrence.amount_status}
+              disabled={!isUpcoming}
+            />
 
-            <label className="grid gap-2 text-sm font-medium text-ink">
-              Expected amount
-              <span className="grid min-h-12 grid-cols-[1fr_auto] overflow-hidden rounded border border-line bg-white">
-                <input
-                  className="min-w-0 border-0 bg-transparent px-3 text-base outline-none disabled:bg-paper"
-                  name="expectedAmount"
-                  inputMode="decimal"
-                  defaultValue={
-                    occurrence.expected_amount_minor === null
-                      ? ""
-                      : formatMinorAmountForInput(
-                          occurrence.expected_amount_minor
-                        )
-                  }
-                  placeholder="0.00"
-                  disabled={!isUpcoming}
-                />
-                <span className="flex items-center border-l border-line bg-paper px-3 text-sm font-semibold text-gray-700">
-                  {occurrence.currency_code}
-                </span>
-              </span>
-            </label>
+            <CurrencyAmountField
+              currencyCode={occurrence.currency_code}
+              defaultValue={
+                occurrence.expected_amount_minor === null
+                  ? ""
+                  : formatMinorAmountForInput(occurrence.expected_amount_minor)
+              }
+              disabled={!isUpcoming}
+              label="Expected amount"
+              placeholder="0.00"
+            />
 
             <label className="grid gap-2 text-sm font-medium text-ink">
               Notes
               <textarea
-                className="min-h-28 rounded border border-line bg-white px-3 py-2 text-base disabled:bg-paper"
+                className="min-h-24 w-full min-w-0 rounded border border-line bg-white px-2 py-2 text-sm disabled:bg-paper sm:min-h-28 sm:px-3 sm:text-base"
                 name="notes"
                 defaultValue={occurrence.notes ?? ""}
                 disabled={!isUpcoming}
@@ -235,122 +220,83 @@ export default async function EditEventPage({
             </label>
 
             <button
-              className="min-h-12 rounded bg-mint px-4 font-semibold text-white disabled:opacity-60"
+              className={`${primaryActionClass} sm:justify-self-start`}
               disabled={!isUpcoming}
             >
               Save event
             </button>
+            </EventFormSection>
           </form>
 
-          <form action={updateEventPlanAction} className="grid min-w-0 gap-5 border-t border-line pt-5">
+          <form action={updateEventPlanAction}>
             <input name="eventId" type="hidden" value={occurrence.id} />
             <input name="id" type="hidden" value={entry.id} />
             <input name="returnTo" type="hidden" value={returnTo ?? ""} />
-            <div>
-              <h2 className="text-sm font-semibold text-ink">Whole plan</h2>
-              <p className="mt-1 text-sm text-gray-700">
-                These changes apply to the plan behind this event.
-              </p>
-            </div>
+            <EventFormSection
+              description="These changes apply to the plan behind this event."
+              title="Details"
+            >
 
-            <fieldset className="grid gap-3">
-              <legend className="text-sm font-semibold text-ink">Type</legend>
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
-                <label className="flex min-h-12 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold text-gray-700">
-                  <input
-                    className="mr-2"
-                    type="radio"
-                    defaultChecked={entry.kind === "bill"}
-                    disabled
-                  />
-                  Bill
-                </label>
-                <label className="flex min-h-12 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold text-gray-700">
-                  <input
-                    className="mr-2"
-                    type="radio"
-                    defaultChecked={entry.kind === "income"}
-                    disabled
-                  />
-                  Income
-                </label>
-                <ColorTagPicker
-                  defaultColorToken={entry.color_token}
-                  themeToken={themeToken}
-                />
-              </div>
-            </fieldset>
+            <label className="grid gap-2 text-sm font-medium text-ink">
+              Type
+              <select
+                className={`${fieldControlClass} bg-paper text-gray-700`}
+                defaultValue={entry.kind}
+                disabled
+              >
+                <option value="bill">Bill</option>
+                <option value="income">Income</option>
+              </select>
+            </label>
 
             <label className="grid gap-2 text-sm font-medium text-ink">
               Plan name
               <input
-                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                className={fieldControlClass}
                 name="name"
                 defaultValue={entry.name}
                 required
               />
             </label>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm font-medium text-ink">
-                Category
-                <input
-                  className="min-h-12 rounded border border-line bg-white px-3 text-base"
-                  name="categoryName"
-                  defaultValue={category?.name ?? ""}
-                />
-              </label>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:gap-4">
               <EventAccountSelector
                 accounts={accounts ?? []}
                 defaultAccountId={entry.counterparty_id}
               />
+              <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
+                Category
+                <input
+                  className={fieldControlClass}
+                  name="categoryName"
+                  defaultValue={category?.name ?? ""}
+                />
+              </label>
             </div>
 
-            <fieldset className="grid gap-3">
-              <legend className="text-sm font-semibold text-ink">Amount</legend>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {(["fixed", "estimated", "unknown"] as const).map((status) => (
-                  <label
-                    className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium"
-                    key={status}
-                  >
-                    <input
-                      className="mr-2"
-                      type="radio"
-                      name="amountStatus"
-                      value={status}
-                      defaultChecked={entry.default_amount_status === status}
-                    />
-                    {status[0].toUpperCase()}
-                    {status.slice(1)}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <ColorTagPicker
+              defaultColorToken={entry.color_token}
+              themeToken={themeToken}
+            />
 
-            <label className="grid gap-2 text-sm font-medium text-ink">
-              Default amount
-              <span className="grid min-h-12 grid-cols-[1fr_auto] overflow-hidden rounded border border-line bg-white">
-                <input
-                  className="min-w-0 border-0 bg-transparent px-3 text-base outline-none"
-                  name="expectedAmount"
-                  defaultValue={
-                    entry.default_expected_amount_minor === null
-                      ? ""
-                      : formatMinorAmountForInput(entry.default_expected_amount_minor)
-                  }
-                  inputMode="decimal"
-                  placeholder="125.00"
-                />
-                <span className="flex items-center border-l border-line bg-paper px-3 text-sm font-semibold text-gray-700">
-                  {entry.currency_code}
-                </span>
-              </span>
-            </label>
+            <AmountStatusPicker
+              defaultStatus={entry.default_amount_status}
+              legend="Amount"
+            />
 
-            <label className="flex items-start gap-3 rounded border border-line bg-paper p-3 text-sm font-medium text-ink">
+            <CurrencyAmountField
+              currencyCode={entry.currency_code}
+              defaultValue={
+                entry.default_expected_amount_minor === null
+                  ? ""
+                  : formatMinorAmountForInput(entry.default_expected_amount_minor)
+              }
+              label="Default amount"
+            />
+
+            <label className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded border border-line bg-paper p-3 text-sm font-medium text-ink">
               <input
-                className="mt-1"
+                className="mt-1 h-4 w-4 shrink-0 accent-mint"
                 name="updateFutureAmounts"
                 type="checkbox"
                 value="on"
@@ -359,19 +305,24 @@ export default async function EditEventPage({
             </label>
 
             {(futureEvents ?? []).length > 0 ? (
-              <section className="grid gap-3 rounded border border-line bg-paper p-4">
-                <div>
+              <section className="grid min-w-0 gap-3 rounded border border-mint/20 bg-mint/10 p-3 sm:p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
                   <h3 className="text-sm font-semibold text-ink">
                     Future event dates
                   </h3>
                   <p className="mt-1 text-sm text-gray-700">
                     These changes apply only to upcoming events.
                   </p>
+                  </div>
+                  <p className="text-xs font-medium text-gray-700">
+                    {(futureEvents ?? []).length} dates
+                  </p>
                 </div>
-                <div className="grid gap-2">
+                <ol className="grid max-h-96 gap-2 overflow-auto text-sm text-ink sm:grid-cols-2">
                   {(futureEvents ?? []).map((event) => (
-                    <label
-                      className="grid min-w-0 gap-2 rounded border border-line bg-white p-3 text-sm font-medium text-ink sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    <li
+                      className="grid min-w-0 gap-3 rounded border border-line bg-white px-2 py-2 sm:px-3"
                       key={event.id}
                     >
                       <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
@@ -392,48 +343,56 @@ export default async function EditEventPage({
                           </span>
                         </span>
                       </span>
-                      <input
-                        name={`occurrenceDueDate:${event.id}`}
-                        type="date"
-                        defaultValue={event.due_date}
-                        className="min-h-11 min-w-0 rounded border border-line bg-white px-3 text-base"
-                      />
-                    </label>
+                      <span className="grid min-w-0 gap-2">
+                        <span className="text-xs font-semibold text-gray-700">
+                          Due date
+                        </span>
+                        <input
+                          name={`occurrenceDueDate:${event.id}`}
+                          type="date"
+                          defaultValue={event.due_date}
+                          className={dateFieldControlClass}
+                        />
+                      </span>
+                    </li>
                   ))}
-                </div>
+                </ol>
               </section>
             ) : null}
 
-            <button className="min-h-12 rounded bg-mint px-4 font-semibold text-white">
-              Save plan
+            <button className={`${primaryActionClass} sm:justify-self-start`}>
+              Save details
             </button>
+            </EventFormSection>
           </form>
 
           {(recurrenceRules ?? []).length > 0 ? (
-            <section className="grid gap-3 border-t border-line pt-5">
-              <div>
-                <h2 className="text-sm font-semibold text-ink">Schedule</h2>
-                <p className="mt-1 text-sm text-gray-700">
-                  Saving a schedule replaces unpaid generated events for that
-                  rule. Paid, received, skipped, and deleted events are
-                  preserved.
-                </p>
-              </div>
+            <EventFormSection
+              description="Saving a schedule replaces unpaid generated events for that rule. Paid, received, skipped, and deleted events are preserved."
+              title="Schedule"
+            >
               {(recurrenceRules ?? []).map((rule) => (
                 <ScheduleEditor
+                  defaultAmount={
+                    entry.default_expected_amount_minor === null
+                      ? ""
+                      : formatMinorAmountForInput(entry.default_expected_amount_minor)
+                  }
+                  defaultAmountStatus={entry.default_amount_status}
                   eventId={occurrence.id}
                   key={rule.id}
                   returnTo={returnTo}
                   rule={rule}
                 />
               ))}
-            </section>
+            </EventFormSection>
           ) : null}
 
-          <form action={archiveOccurrenceAction} className="border-t border-line pt-5">
+          <form action={archiveOccurrenceAction} className="grid min-w-0 gap-3 rounded border border-line bg-paper p-3 sm:p-5">
             <input name="id" type="hidden" value={occurrence.id} />
             <input name="returnTo" type="hidden" value={returnTo ?? ""} />
-            <button className="min-h-12 rounded border border-danger/30 px-4 font-semibold text-danger">
+            <h2 className="text-sm font-semibold text-ink">Delete</h2>
+            <button className="min-h-12 rounded border border-danger/30 bg-white px-4 font-semibold text-danger sm:justify-self-start">
               Delete event
             </button>
           </form>

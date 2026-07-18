@@ -401,6 +401,21 @@ export type Database = {
         };
         Returns: string;
       };
+      convert_generated_recurrence_rule_to_manual: {
+        Args: {
+          p_due_dates: string[];
+          p_reason?: string | null;
+          p_rule_id: string;
+        };
+        Returns: string;
+      };
+      supersede_sibling_generated_recurrence_rules: {
+        Args: {
+          p_keep_rule_id: string;
+          p_reason?: string | null;
+        };
+        Returns: void;
+      };
       archive_financial_item: {
         Args: {
           p_financial_item_id: string;

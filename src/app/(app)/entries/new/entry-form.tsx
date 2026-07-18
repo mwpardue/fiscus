@@ -9,11 +9,22 @@ import {
   generateDueDates,
   type ScheduleBasis
 } from "@/lib/recurrence/generated";
+import { getEarliestSelectedWeekdayOnOrAfter } from "@/lib/recurrence/weekday-anchor";
 import {
   createEntryAction,
   type NewEntryActionState
 } from "./actions";
 import { ColorTagPicker } from "../color-tag-picker";
+import {
+  AmountStatusPicker,
+  ChoiceButton,
+  CurrencyAmountField,
+  DatePreviewList,
+  EventFormSection,
+  fieldControlClass,
+  primaryActionClass,
+  secondaryActionClass
+} from "../event-form-ui";
 
 const initialState: NewEntryActionState = {
   status: "idle"
@@ -37,7 +48,9 @@ export function EntryForm({
   const [scheduleMode, setScheduleMode] = useState<
     "ongoing" | "finite" | "manual"
   >("ongoing");
-  const [recurrenceType, setRecurrenceType] = useState<"date" | "day">("date");
+  const [recurrenceType, setRecurrenceType] = useState<
+    "date" | "day" | "manual"
+  >("date");
   const [scheduleBasis, setScheduleBasis] = useState<ScheduleBasis>("date");
   const [dayPattern, setDayPattern] = useState<"weekly" | "monthly">("weekly");
   const [intervalUnit, setIntervalUnit] = useState<
@@ -165,57 +178,38 @@ export function EntryForm({
   const cancelHref = getSafeCancelHref(returnTo);
 
   return (
-    <form action={formAction} className="grid gap-5">
+    <form action={formAction} className="grid gap-4">
       <input name="returnTo" type="hidden" value={returnTo ?? ""} />
 
-      <section className="grid gap-4 rounded border border-line bg-paper p-4">
-        <h2 className="text-sm font-semibold text-ink">Type and plan</h2>
-        <fieldset className="grid gap-3">
-          <legend className="sr-only">Type</legend>
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
-            <label className="flex min-h-12 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold">
-              <input
-                className="mr-2"
-                type="radio"
-                name="kind"
-                value="bill"
-                defaultChecked
-              />
-              Bill
-            </label>
-            <label className="flex min-h-12 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold">
-              <input className="mr-2" type="radio" name="kind" value="income" />
-              Income
-            </label>
-            <ColorTagPicker themeToken={themeToken} />
-          </div>
-        </fieldset>
+      <EventFormSection title="Type and plan">
+        <label className="grid gap-2 text-sm font-medium text-ink">
+          Type
+          <select
+            className={fieldControlClass}
+            name="kind"
+            defaultValue="bill"
+          >
+            <option value="bill">Bill</option>
+            <option value="income">Income</option>
+          </select>
+        </label>
 
         <label className="grid gap-2 text-sm font-medium text-ink">
           Plan name
           <input
-            className="min-h-12 rounded border border-line bg-white px-3 text-base"
+            className={fieldControlClass}
             name="name"
             placeholder="Mortgage, paycheck, phone bill"
             required
           />
         </label>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
-            Category
-            <input
-              className="min-h-12 rounded border border-line bg-white px-3 text-base"
-              name="categoryName"
-              placeholder="Food, utilities, subscriptions"
-            />
-          </label>
-
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:gap-4">
           <div className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             <label htmlFor="new-event-account">Account</label>
             <select
               id="new-event-account"
-              className="min-h-12 rounded border border-line bg-white px-3 text-base"
+              className={fieldControlClass}
               name="accountChoice"
               value={
                 accountMode === "existing"
@@ -249,6 +243,14 @@ export function EntryForm({
               <option value="__new__">New account...</option>
             </select>
           </div>
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
+            Category
+            <input
+              className={fieldControlClass}
+              name="categoryName"
+              placeholder="Food, utilities"
+            />
+          </label>
         </div>
 
         <input name="accountMode" type="hidden" value={accountMode} />
@@ -261,7 +263,7 @@ export function EntryForm({
             <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
               New account name
               <input
-                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                className={fieldControlClass}
                 name="counterpartyName"
                 placeholder="Merchant, biller, payer, employer"
                 required
@@ -270,7 +272,7 @@ export function EntryForm({
             <label className="grid min-w-0 content-start gap-2 text-sm font-medium text-ink">
               Account website
               <input
-                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                className={fieldControlClass}
                 name="counterpartyWebsiteUrl"
                 placeholder="att.com"
                 type="text"
@@ -281,6 +283,8 @@ export function EntryForm({
             </p>
           </div>
         ) : null}
+
+        <ColorTagPicker themeToken={themeToken} />
 
         <details className="grid gap-3 text-sm text-ink">
           <summary className="w-fit cursor-pointer rounded border border-line bg-white px-3 py-2 text-sm font-semibold">
@@ -312,110 +316,52 @@ export function EntryForm({
             </p>
           </div>
         </details>
-      </section>
+      </EventFormSection>
 
       <input name="currencyCode" type="hidden" value={defaultCurrencyCode} />
 
-      <section className="grid gap-4 rounded border border-line bg-paper p-4">
-        <h2 className="text-sm font-semibold text-ink">Amount</h2>
-        <fieldset className="grid gap-3">
-          <legend className="sr-only">Amount status</legend>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <label className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium">
-              <input
-                className="mr-2"
-                type="radio"
-                name="amountStatus"
-                value="fixed"
-                defaultChecked
-              />
-              Fixed
-            </label>
-            <label className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium">
-              <input
-                className="mr-2"
-                type="radio"
-                name="amountStatus"
-                value="estimated"
-              />
-              Estimated
-            </label>
-            <label className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium">
-              <input
-                className="mr-2"
-                type="radio"
-                name="amountStatus"
-                value="unknown"
-              />
-              Unknown
-            </label>
-          </div>
-        </fieldset>
+      <EventFormSection title="Amount">
+        <AmountStatusPicker hideLegend />
+        <CurrencyAmountField
+          currencyCode={defaultCurrencyCode}
+          label="Expected amount"
+          onChange={(event) => setExpectedAmount(event.target.value)}
+          value={expectedAmount}
+        />
+      </EventFormSection>
 
-        <label className="grid gap-2 text-sm font-medium text-ink">
-          Expected amount
-          <span className="grid min-h-12 grid-cols-[1fr_auto] overflow-hidden rounded border border-line bg-white">
-            <input
-              className="min-w-0 border-0 bg-transparent px-3 text-base outline-none"
-              name="expectedAmount"
-              inputMode="decimal"
-              value={expectedAmount}
-              onChange={(event) => setExpectedAmount(event.target.value)}
-              placeholder="125.00"
-            />
-            <span className="flex items-center border-l border-line bg-paper px-3 text-sm font-semibold text-gray-700">
-              {defaultCurrencyCode}
-            </span>
-          </span>
-        </label>
-      </section>
-
-      <section className="grid gap-4 rounded border border-line bg-paper p-4">
-        <h2 className="text-sm font-semibold text-ink">Schedule</h2>
-        <fieldset className="grid gap-3">
-          <legend className="sr-only">Schedule</legend>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <label className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium">
-              <input
-                className="mr-2"
-                type="radio"
-                name="scheduleMode"
-                value="ongoing"
-                checked={scheduleMode === "ongoing"}
-                onChange={() => setScheduleMode("ongoing")}
-              />
-              Ongoing
-            </label>
-            <label className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium">
-              <input
-                className="mr-2"
-                type="radio"
-                name="scheduleMode"
-                value="finite"
-                checked={scheduleMode === "finite"}
-                onChange={() => setScheduleMode("finite")}
-              />
-              Finite
-            </label>
-            <label className="flex min-h-12 items-center rounded border border-line bg-white px-3 text-sm font-medium">
-              <input
-                className="mr-2"
-                type="radio"
-                name="scheduleMode"
-                value="manual"
-                checked={scheduleMode === "manual"}
-                onChange={() => setScheduleMode("manual")}
-              />
-              Manual
-            </label>
-          </div>
-        </fieldset>
+      <EventFormSection title="Schedule">
+        <input name="scheduleMode" type="hidden" value={scheduleMode} />
+        <div className="grid grid-cols-2 gap-2">
+          <ChoiceButton
+            active={scheduleMode === "ongoing"}
+            onClick={() => {
+              setScheduleMode("ongoing");
+              if (recurrenceType === "manual") {
+                setRecurrenceType("date");
+              }
+            }}
+          >
+            Ongoing
+          </ChoiceButton>
+          <ChoiceButton
+            active={scheduleMode !== "ongoing"}
+            onClick={() => {
+              setScheduleMode("finite");
+              if (recurrenceType === "manual") {
+                setRecurrenceType("date");
+              }
+            }}
+          >
+            Finite
+          </ChoiceButton>
+        </div>
 
         {scheduleMode === "finite" ? (
           <label className="grid gap-2 text-sm font-medium text-ink">
             Events
             <input
-              className="min-h-12 rounded border border-line bg-white px-3 text-base disabled:bg-paper disabled:text-gray-600"
+              className={`${fieldControlClass} disabled:bg-paper disabled:text-gray-600`}
               disabled={scheduleMode !== "finite"}
               min={1}
               max={120}
@@ -428,24 +374,38 @@ export function EntryForm({
           </label>
         ) : null}
 
-      {scheduleMode !== "manual" ? (
         <div className="grid gap-4">
-          <div className="grid gap-4 sm:grid-cols-3 sm:items-start">
-            <label className="grid gap-2 text-sm font-medium text-ink">
+          <div
+            className={
+              scheduleMode === "manual"
+                ? "grid items-start gap-2 sm:max-w-xs"
+                : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-start gap-2 sm:gap-4"
+            }
+          >
+            <label className="grid min-w-0 gap-2 text-xs font-medium text-ink sm:text-sm">
               Recurrence type
               <select
-                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                className="min-h-11 min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
                 value={recurrenceType}
                 onChange={(event) => {
-                  const nextType = event.target.value as "date" | "day";
+                  const nextType = event.target.value as
+                    | "date"
+                    | "day"
+                    | "manual";
                   setRecurrenceType(nextType);
                   if (nextType === "date") {
+                    if (scheduleMode === "manual") {
+                      setScheduleMode("finite");
+                    }
                     setScheduleBasis("date");
                     setIntervalUnit("month");
                     if (!anchorDateTouched.current) {
                       setAnchorDate(getNextDayDate());
                     }
-                  } else {
+                  } else if (nextType === "day") {
+                    if (scheduleMode === "manual") {
+                      setScheduleMode("finite");
+                    }
                     const nextBasis =
                       dayPattern === "weekly" ? "weekday" : "month_weekday";
                     setScheduleBasis(nextBasis);
@@ -460,21 +420,26 @@ export function EntryForm({
                         })
                       );
                     }
+                  } else {
+                    setScheduleMode("manual");
                   }
                 }}
               >
                 <option value="date">Date</option>
                 <option value="day">Day</option>
+                {scheduleMode !== "ongoing" ? (
+                  <option value="manual">Manual</option>
+                ) : null}
               </select>
             </label>
 
             <input name="scheduleBasis" type="hidden" value={scheduleBasis} />
 
-            {recurrenceType === "day" ? (
-              <label className="grid gap-2 text-sm font-medium text-ink">
+            {scheduleMode !== "manual" && recurrenceType === "day" ? (
+              <label className="grid min-w-0 gap-2 text-xs font-medium text-ink sm:text-sm">
                 Day pattern
                 <select
-                  className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                  className="min-h-11 min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
                   value={dayPattern}
                   onChange={(event) => {
                     const nextPattern = event.target.value as "weekly" | "monthly";
@@ -504,30 +469,32 @@ export function EntryForm({
               </label>
             ) : null}
 
-            <label className="grid gap-2 text-sm font-medium text-ink">
-              Every
-              <input
-                className="min-h-12 rounded border border-line bg-white px-3 text-base"
-                min={1}
-                max={24}
-                name="intervalCount"
-                type="number"
-                value={intervalCount}
-                onChange={(event) => setIntervalCount(event.target.value)}
-                required
-              />
-              {recurrenceType === "day" ? (
-                <span className="text-xs text-gray-700">
-                  {dayPattern === "weekly" ? "weeks" : "months"}
-                </span>
-              ) : null}
-            </label>
+            {scheduleMode !== "manual" ? (
+              <label className="grid min-w-0 gap-2 text-xs font-medium text-ink sm:text-sm">
+                Every
+                <input
+                  className="min-h-11 min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
+                  min={1}
+                  max={24}
+                  name="intervalCount"
+                  type="number"
+                  value={intervalCount}
+                  onChange={(event) => setIntervalCount(event.target.value)}
+                  required
+                />
+                {recurrenceType === "day" ? (
+                  <span className="text-[0.6875rem] text-gray-700 sm:text-xs">
+                    {dayPattern === "weekly" ? "weeks" : "months"}
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
 
-            {recurrenceType === "date" ? (
-              <label className="grid gap-2 text-sm font-medium text-ink">
+            {scheduleMode !== "manual" && recurrenceType === "date" ? (
+              <label className="grid min-w-0 gap-2 text-xs font-medium text-ink sm:text-sm">
                 Unit
                 <select
-                  className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                  className="min-h-11 min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
                   name="intervalUnit"
                   value={intervalUnit}
                   onChange={(event) =>
@@ -545,77 +512,79 @@ export function EntryForm({
             ) : null}
           </div>
 
-          <details className="grid gap-3 text-sm text-ink">
-            <summary className="w-fit cursor-pointer rounded border border-line bg-white px-3 py-2 text-sm font-semibold">
-              Recurrence Options
-            </summary>
-            <div className="mt-3 grid gap-4 rounded border border-line bg-paper p-3 sm:grid-cols-2">
-              {recurrenceType === "date" &&
-              (intervalUnit === "month" || intervalUnit === "year") ? (
-                <label className="grid gap-2 text-sm font-medium text-ink">
-                  Short-month behavior
-                  <select
-                    className="min-h-12 rounded border border-line bg-white px-3 text-base"
+          {scheduleMode !== "manual" ? (
+            <details className="grid gap-3 text-sm text-ink">
+              <summary className="w-fit cursor-pointer rounded border border-line bg-white px-3 py-2 text-sm font-semibold">
+                Recurrence Options
+              </summary>
+              <div className="mt-3 grid gap-4 rounded border border-line bg-paper p-3 sm:grid-cols-2">
+                {recurrenceType === "date" &&
+                (intervalUnit === "month" || intervalUnit === "year") ? (
+                  <label className="grid gap-2 text-sm font-medium text-ink">
+                    Short-month behavior
+                    <select
+                      className="min-h-11 w-full min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
+                      name="shortMonthBehavior"
+                      value={shortMonthBehavior}
+                      onChange={(event) =>
+                        setShortMonthBehavior(
+                          event.target.value as
+                            | "last_day"
+                            | "next_month"
+                            | "skip"
+                        )
+                      }
+                    >
+                      <option value="last_day">Use final day</option>
+                      <option value="next_month">Roll into next month</option>
+                      <option value="skip">Skip that month</option>
+                    </select>
+                  </label>
+                ) : (
+                  <input
                     name="shortMonthBehavior"
+                    type="hidden"
                     value={shortMonthBehavior}
+                  />
+                )}
+                <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
+                  Weekend or holiday
+                  <select
+                    className="min-h-11 w-full min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
+                    name="businessDayAdjustment"
+                    value={businessDayAdjustment}
                     onChange={(event) =>
-                      setShortMonthBehavior(
-                        event.target.value as "last_day" | "next_month" | "skip"
+                      setBusinessDayAdjustment(
+                        event.target.value as
+                          | "none"
+                          | "previous_business_day"
+                          | "next_business_day"
                       )
                     }
                   >
-                    <option value="last_day">Use final day</option>
-                    <option value="next_month">Roll into next month</option>
-                    <option value="skip">Skip that month</option>
+                    <option value="none">No adjustment</option>
+                    <option value="previous_business_day">
+                      Move to previous business day
+                    </option>
+                    <option value="next_business_day">
+                      Move to next business day
+                    </option>
                   </select>
                 </label>
-              ) : (
-                <input
-                  name="shortMonthBehavior"
-                  type="hidden"
-                  value={shortMonthBehavior}
-                />
-              )}
-              <label className="grid gap-2 text-sm font-medium text-ink">
-                Weekend or holiday
-                <select
-                  className="min-h-12 rounded border border-line bg-white px-3 text-base"
-                  name="businessDayAdjustment"
-                  value={businessDayAdjustment}
-                  onChange={(event) =>
-                    setBusinessDayAdjustment(
-                      event.target.value as
-                        | "none"
-                        | "previous_business_day"
-                        | "next_business_day"
-                    )
-                  }
-                >
-                  <option value="none">No adjustment</option>
-                  <option value="previous_business_day">
-                    Move to previous business day
-                  </option>
-                  <option value="next_business_day">
-                    Move to next business day
-                  </option>
-                </select>
-              </label>
-            </div>
-          </details>
+              </div>
+            </details>
+          ) : null}
         </div>
-      ) : (
-        <input name="businessDayAdjustment" type="hidden" value="none" />
-      )}
 
       {scheduleMode !== "manual" && recurrenceType === "day" ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <input name="intervalUnit" type="hidden" value={intervalUnit} />
 
           {dayPattern === "monthly" ? (
-            <label className="grid gap-2 text-sm font-medium text-ink">
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
               Week
               <select
-                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                className="min-h-11 w-full min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
                 name="ordinalWeek"
                 value={ordinalWeek}
                 onChange={(event) => setOrdinalWeek(event.target.value)}
@@ -666,8 +635,8 @@ export function EntryForm({
                       <span
                         className={
                           selected
-                            ? "flex aspect-square min-h-10 items-center justify-center rounded-full border-2 border-mint bg-mint text-sm font-semibold text-white shadow-sm ring-2 ring-mint/30"
-                            : "flex aspect-square min-h-10 items-center justify-center rounded-full border border-transparent bg-white text-sm font-semibold text-gray-700"
+                            ? "flex aspect-square min-h-8 items-center justify-center rounded-full border-2 border-mint bg-mint text-xs font-semibold text-white shadow-sm ring-2 ring-mint/30 sm:min-h-10 sm:text-sm"
+                            : "flex aspect-square min-h-8 items-center justify-center rounded-full border border-transparent bg-white text-xs font-semibold text-gray-700 sm:min-h-10 sm:text-sm"
                         }
                       >
                         {option.shortLabel}
@@ -678,10 +647,10 @@ export function EntryForm({
               </div>
             </fieldset>
           ) : (
-            <label className="grid gap-2 text-sm font-medium text-ink">
+            <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
               Weekday
               <select
-                className="min-h-12 rounded border border-line bg-white px-3 text-base"
+                className="min-h-11 w-full min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
                 name="weekday"
                 value={weekday}
                 onChange={(event) => setWeekday(event.target.value)}
@@ -710,9 +679,9 @@ export function EntryForm({
         <section className="grid gap-3">
           <h2 className="text-sm font-semibold text-ink">Dates</h2>
           <label className="grid gap-2 text-sm font-medium text-ink">
-            First due date
+            Starts on
             <input
-              className="min-h-12 rounded border border-line bg-white px-3 text-base"
+              className="min-h-11 w-full min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
               name="anchorDate"
               type="date"
               value={anchorDate}
@@ -726,147 +695,125 @@ export function EntryForm({
         </section>
       ) : null}
 
-        {scheduleMode === "manual" ? (
-          <section className="grid gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-ink">Dates</h2>
-            <button
-              className="min-h-10 rounded border border-line bg-white px-3 text-sm font-semibold"
-              type="button"
-            onClick={() =>
-              setManualRows((rows) => [
-                ...rows,
-                {
-                  amount: expectedAmount,
-                  amountStatus: "fixed",
-                  date: getNextDayDate()
-                }
-              ])
-            }
-            >
-              Add date
-            </button>
-          </div>
-          <div className="grid gap-2">
-            {manualRows.map((row, index) => (
-              <div
-                className="grid gap-2 sm:grid-cols-[1fr_10rem_1fr_auto]"
-                key={index}
-              >
-                <label className="sr-only" htmlFor={`manual-date-${index}`}>
-                  Manual due date {index + 1}
-                </label>
-                <input
-                  className="min-h-12 rounded border border-line bg-white px-3 text-base"
-                  id={`manual-date-${index}`}
-                  name="manualDate"
-                  type="date"
-                  value={row.date}
-                  onChange={(event) =>
-                    setManualRows((rows) =>
-                      rows.map((existingRow, rowIndex) =>
-                        rowIndex === index
-                          ? { ...existingRow, date: event.target.value }
-                          : existingRow
-                      )
-                    )
-                  }
-                  required={index === 0}
-                />
-                <select
-                  className="min-h-12 rounded border border-line bg-white px-3 text-base"
-                  name="manualAmountStatus"
-                  value={row.amountStatus}
-                  onChange={(event) =>
-                    setManualRows((rows) =>
-                      rows.map((existingRow, rowIndex) =>
-                        rowIndex === index
-                          ? { ...existingRow, amountStatus: event.target.value }
-                          : existingRow
-                      )
-                    )
-                  }
-                >
-                  <option value="unknown">Unknown</option>
-                  <option value="fixed">Fixed</option>
-                  <option value="estimated">Estimated</option>
-                </select>
-                <input
-                  className="min-h-12 rounded border border-line bg-white px-3 text-base disabled:bg-paper"
-                  disabled={row.amountStatus === "unknown"}
-                  inputMode="decimal"
-                  name="manualExpectedAmount"
-                  onChange={(event) =>
-                    setManualRows((rows) =>
-                      rows.map((existingRow, rowIndex) =>
-                        rowIndex === index
-                          ? { ...existingRow, amount: event.target.value }
-                          : existingRow
-                      )
-                    )
-                  }
-                  placeholder="Amount"
-                  value={row.amount}
-                />
-                <button
-                  className="min-h-12 rounded border border-line bg-white px-3 text-sm font-semibold disabled:opacity-50"
-                  type="button"
-                  disabled={manualRows.length === 1}
-                  onClick={() =>
-                    setManualRows((rows) =>
-                      rows.filter((_, rowIndex) => rowIndex !== index)
-                    )
-                  }
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-          </section>
-        ) : null}
-
-        {scheduleMode === "finite" ? (
-          <section className="grid gap-3 rounded border border-line bg-white p-4">
+      {scheduleMode === "manual" ? (
+          <section className="grid min-w-0 gap-3 rounded border border-line bg-paper p-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ink">Preview</h2>
-              <p className="text-xs font-medium text-gray-700">
-                {previewDates.length} dates
-              </p>
+              <h2 className="text-sm font-semibold text-ink">Dates</h2>
+              <button
+                className="min-h-10 rounded border border-line bg-white px-3 text-sm font-semibold"
+                type="button"
+                onClick={() =>
+                  setManualRows((rows) => [
+                    ...rows,
+                    {
+                      amount: expectedAmount,
+                      amountStatus: "fixed",
+                      date: getNextDayDate()
+                    }
+                  ])
+                }
+              >
+                Add date
+              </button>
             </div>
-            <p className="text-sm text-gray-700">{scheduleDescription}</p>
-            {previewDates.length > 0 ? (
-              <ol className="grid max-h-56 gap-2 overflow-auto text-sm text-ink sm:grid-cols-2">
-                {previewDates.map((date) => (
-                  <li
-                    className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded border border-line bg-white px-3 py-2"
-                    key={date}
+            <div className="grid gap-3">
+              {manualRows.map((row, index) => (
+                <div
+                  className="grid min-w-0 gap-3 overflow-hidden rounded border border-line bg-white p-3 sm:grid-cols-[1fr_10rem_1fr_auto] sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0"
+                  key={index}
+                >
+                  <label className="sr-only" htmlFor={`manual-date-${index}`}>
+                    Manual due date {index + 1}
+                  </label>
+                  <input
+                    className="block h-11 w-full min-w-0 max-w-full appearance-none overflow-hidden rounded border border-line bg-white px-2 text-left text-sm sm:h-12 sm:px-3 sm:text-base"
+                    id={`manual-date-${index}`}
+                    name="manualDate"
+                    type="date"
+                    value={row.date}
+                    onChange={(event) =>
+                      setManualRows((rows) =>
+                        rows.map((existingRow, rowIndex) =>
+                          rowIndex === index
+                            ? { ...existingRow, date: event.target.value }
+                            : existingRow
+                        )
+                      )
+                    }
+                    required={index === 0}
+                  />
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:contents">
+                    <select
+                      className="min-h-11 w-full min-w-0 rounded border border-line bg-white px-2 text-sm sm:min-h-12 sm:px-3 sm:text-base"
+                      name="manualAmountStatus"
+                      value={row.amountStatus}
+                      onChange={(event) =>
+                        setManualRows((rows) =>
+                          rows.map((existingRow, rowIndex) =>
+                            rowIndex === index
+                              ? {
+                                  ...existingRow,
+                                  amountStatus: event.target.value
+                                }
+                              : existingRow
+                          )
+                        )
+                      }
+                    >
+                      <option value="unknown">Unknown</option>
+                      <option value="fixed">Fixed</option>
+                      <option value="estimated">Estimated</option>
+                    </select>
+                    <input
+                      className="min-h-11 w-full min-w-0 rounded border border-line bg-white px-2 text-sm disabled:bg-paper sm:min-h-12 sm:px-3 sm:text-base"
+                      disabled={row.amountStatus === "unknown"}
+                      inputMode="decimal"
+                      name="manualExpectedAmount"
+                      onChange={(event) =>
+                        setManualRows((rows) =>
+                          rows.map((existingRow, rowIndex) =>
+                            rowIndex === index
+                              ? { ...existingRow, amount: event.target.value }
+                              : existingRow
+                          )
+                        )
+                      }
+                      placeholder="Amount"
+                      value={row.amount}
+                    />
+                  </div>
+                  <button
+                    className="min-h-11 rounded border border-line bg-white px-3 text-sm font-semibold disabled:opacity-50 sm:min-h-12"
+                    type="button"
+                    disabled={manualRows.length === 1}
+                    onClick={() =>
+                      setManualRows((rows) =>
+                        rows.filter((_, rowIndex) => rowIndex !== index)
+                      )
+                    }
                   >
-                    <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
-                      {formatWeekday(date)}
-                    </span>
-                    <span className="font-semibold">{formatDisplayDate(date)}</span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="rounded border border-line bg-white px-3 py-2 text-sm text-gray-700">
-                Enter a first due date to preview the generated schedule.
-              </p>
-            )}
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
           </section>
         ) : null}
-      </section>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      {scheduleMode !== "manual" ? (
+        <DatePreviewList dates={previewDates} description={scheduleDescription} />
+      ) : null}
+      </EventFormSection>
+
+        <div className="flex flex-col-reverse gap-2 rounded border border-line bg-paper p-4 sm:flex-row sm:justify-end sm:p-5">
         <Link
-          className="inline-flex min-h-12 items-center justify-center rounded border border-line bg-white px-4 font-semibold text-ink"
+          className={secondaryActionClass}
           href={cancelHref}
         >
           Cancel
         </Link>
         <button
-          className="min-h-12 rounded bg-mint px-4 font-semibold text-white disabled:opacity-60"
+          className={primaryActionClass}
           disabled={pending}
         >
           Create event
@@ -906,8 +853,13 @@ function getDefaultAnchorDate({
   const tomorrow = getTomorrow();
 
   if (scheduleBasis === "weekday") {
-    const firstWeekday = Number(selectedWeekdays[0] ?? weekday);
-    return formatLocalDate(nextWeekdayOnOrAfter(tomorrow, firstWeekday));
+    return formatLocalDate(
+      getEarliestSelectedWeekdayOnOrAfter(
+        tomorrow,
+        selectedWeekdays,
+        weekday
+      )
+    );
   }
 
   if (scheduleBasis === "month_weekday") {
@@ -939,40 +891,11 @@ function getSafeCancelHref(returnTo: string | undefined): Route {
   return "/events";
 }
 
-function formatDisplayDate(date: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric"
-  }).format(parseDateOnly(date));
-}
-
-function formatWeekday(date: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    weekday: "short"
-  }).format(parseDateOnly(date));
-}
-
-function parseDateOnly(date: string) {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
 function getTomorrow() {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() + 1);
   return date;
-}
-
-function nextWeekdayOnOrAfter(date: Date, weekday: number) {
-  const nextDate = new Date(date);
-  const normalizedWeekday = normalizeWeekday(weekday);
-  const dayOffset = (normalizedWeekday - nextDate.getDay() + 7) % 7;
-  nextDate.setDate(nextDate.getDate() + dayOffset);
-  return nextDate;
 }
 
 function nextMonthlyWeekdayOnOrAfter(

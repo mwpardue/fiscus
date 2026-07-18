@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DEFAULT_COLOR_TAG_TOKEN, isColorTagToken } from "@/lib/color-tags";
+import type { Database } from "@/lib/database.types";
 import { applyFinancialItemMetadata } from "@/lib/financial-item-metadata";
 import { parseMajorAmountToMinor } from "@/lib/money";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -54,7 +55,7 @@ const updateEventPlanSchema = z
 
 const updateGeneratedScheduleSchema = z
   .object({
-    anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     businessDayAdjustment: z.enum([
       "none",
       "previous_business_day",
@@ -63,6 +64,11 @@ const updateGeneratedScheduleSchema = z
     eventId: z.string().uuid(),
     intervalCount: z.coerce.number().int().min(1).max(24),
     intervalUnit: z.enum(["day", "week", "month", "year"]),
+    manualAmountStatuses: z
+      .array(z.enum(["fixed", "estimated", "unknown"]))
+      .optional(),
+    manualExpectedAmounts: z.array(z.string()).optional(),
+    manualDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
     occurrenceCount: z.coerce.number().int().min(1).max(120).optional(),
     ordinalWeek: z.coerce
       .number()
@@ -72,9 +78,10 @@ const updateGeneratedScheduleSchema = z
     returnTo: z.string().trim().optional(),
     ruleId: z.string().uuid(),
     scheduleBasis: z.enum(["date", "weekday", "month_weekday"]),
-    scheduleMode: z.enum(["ongoing", "finite"]),
+    scheduleMode: z.enum(["ongoing", "finite", "manual"]),
     shortMonthBehavior: z.enum(["last_day", "next_month", "skip"]),
-    weekday: z.coerce.number().int().min(0).max(6).optional()
+    weekday: z.coerce.number().int().min(0).max(6).optional(),
+    weekdays: z.array(z.coerce.number().int().min(0).max(6)).optional()
   })
   .superRefine((value, context) => {
     if (value.scheduleMode === "finite" && !value.occurrenceCount) {
@@ -82,6 +89,29 @@ const updateGeneratedScheduleSchema = z
         code: "custom",
         path: ["occurrenceCount"],
         message: "Enter how many events to create."
+      });
+    }
+
+    if (
+      value.scheduleMode === "manual" &&
+      (!value.manualDates || value.manualDates.length === 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["manualDates"],
+        message: "Enter at least one manual due date."
+      });
+    }
+
+    if (value.scheduleMode === "manual") {
+      return;
+    }
+
+    if (!value.anchorDate) {
+      context.addIssue({
+        code: "custom",
+        path: ["anchorDate"],
+        message: "Enter a start date."
       });
     }
 
@@ -112,7 +142,11 @@ const updateGeneratedScheduleSchema = z
       });
     }
 
-    if (value.scheduleBasis !== "date" && value.weekday === undefined) {
+    if (
+      value.scheduleBasis !== "date" &&
+      value.weekday === undefined &&
+      (!value.weekdays || value.weekdays.length === 0)
+    ) {
       context.addIssue({
         code: "custom",
         path: ["weekday"],
@@ -265,6 +299,17 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
     eventId: formData.get("eventId"),
     intervalCount: formData.get("intervalCount") ?? "1",
     intervalUnit: formData.get("intervalUnit") ?? "month",
+    manualAmountStatuses: formData
+      .getAll("manualAmountStatus")
+      .map((value) => String(value))
+      .filter(Boolean),
+    manualExpectedAmounts: formData
+      .getAll("manualExpectedAmount")
+      .map((value) => String(value)),
+    manualDates: formData
+      .getAll("manualDate")
+      .map((value) => String(value))
+      .filter(Boolean),
     occurrenceCount: formData.get("occurrenceCount") || undefined,
     ordinalWeek: formData.get("ordinalWeek") || undefined,
     returnTo: formData.get("returnTo") || undefined,
@@ -272,7 +317,11 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
     scheduleBasis: formData.get("scheduleBasis") ?? "date",
     scheduleMode: formData.get("scheduleMode"),
     shortMonthBehavior: formData.get("shortMonthBehavior") ?? "last_day",
-    weekday: formData.get("weekday") || undefined
+    weekday: formData.get("weekday") || undefined,
+    weekdays: formData
+      .getAll("weekday")
+      .map((value) => String(value))
+      .filter(Boolean)
   });
 
   if (!parsed.success) {
@@ -298,6 +347,9 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
     eventId,
     intervalCount,
     intervalUnit,
+    manualAmountStatuses,
+    manualExpectedAmounts,
+    manualDates,
     occurrenceCount,
     ordinalWeek,
     returnTo,
@@ -305,14 +357,75 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
     scheduleBasis,
     scheduleMode,
     shortMonthBehavior,
-    weekday
+    weekday,
+    weekdays
   } = parsed.data;
+  const manualRows = (manualDates ?? [])
+    .map((date, index) => ({
+      amountStatus: manualAmountStatuses?.[index] ?? "unknown",
+      date,
+      expectedAmount: manualExpectedAmounts?.[index] ?? ""
+    }))
+    .filter((row) => row.date)
+    .sort((left, right) => left.date.localeCompare(right.date));
+  const seenManualDates = new Set<string>();
+  const uniqueManualRows = manualRows.filter((row) => {
+    if (seenManualDates.has(row.date)) {
+      return false;
+    }
+    seenManualDates.add(row.date);
+    return true;
+  });
+  const manualDueDates = uniqueManualRows.map((row) => row.date);
+
+  if (scheduleMode === "manual") {
+    const { data: manualRuleId, error } = await supabase.rpc(
+      "convert_generated_recurrence_rule_to_manual",
+      {
+        p_due_dates: manualDueDates,
+        p_reason: "Schedule converted to manual from event edit page",
+        p_rule_id: ruleId
+      }
+    );
+
+    if (error) {
+      throw new Error("Unable to convert that schedule to manual.");
+    }
+
+    const overrideError = await applyManualOccurrenceOverrides(supabase, {
+      manualRows: uniqueManualRows,
+      recurrenceRuleId: manualRuleId,
+      userId: user.id
+    });
+
+    if (overrideError) {
+      throw new Error(overrideError);
+    }
+
+    revalidatePath("/events");
+    revalidatePath(`/events/${eventId}/edit`);
+    revalidatePath("/dashboard");
+    redirect(getSafeReturnTo(returnTo, `/events/${eventId}/edit` as Route));
+  }
+
+  const generatedAnchorDate = anchorDate ?? "";
   const generatedCount =
     scheduleMode === "finite"
       ? occurrenceCount ?? 0
       : ONGOING_MATERIALIZED_OCCURRENCE_COUNT;
+  const activeWeekdays =
+    scheduleBasis === "weekday"
+      ? Array.from(
+          new Set(
+            (weekdays?.length ? weekdays : [weekday]).filter(
+              (value): value is number => typeof value === "number"
+            )
+          )
+        )
+      : [weekday ?? null];
+  const primaryWeekday = activeWeekdays[0] ?? weekday ?? null;
   const dueDates = generateDueDates({
-    anchorDate,
+    anchorDate: generatedAnchorDate,
     businessDayAdjustment,
     count: generatedCount,
     intervalCount,
@@ -320,22 +433,22 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
     ordinalWeek: ordinalWeek ?? null,
     scheduleBasis: scheduleBasis as ScheduleBasis,
     shortMonthBehavior,
-    weekday: weekday ?? null
+    weekday: primaryWeekday
   });
 
   if (dueDates.length === 0) {
     throw new Error("Check the schedule dates and try again.");
   }
 
-  const anchorDay = Number(anchorDate.slice(8, 10));
+  const anchorDay = Number(generatedAnchorDate.slice(8, 10));
   const { error } = await supabase.rpc("update_generated_recurrence_rule", {
-    p_anchor_date: anchorDate,
+    p_anchor_date: generatedAnchorDate,
     p_anchor_day:
       (intervalUnit === "month" || intervalUnit === "year") &&
       scheduleBasis === "date"
         ? anchorDay
         : null,
-    p_anchor_weekday: scheduleBasis === "date" ? null : weekday ?? null,
+    p_anchor_weekday: scheduleBasis === "date" ? null : primaryWeekday,
     p_business_day_adjustment: businessDayAdjustment,
     p_due_dates: dueDates,
     p_interval_count: intervalCount,
@@ -355,6 +468,69 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
 
   if (error) {
     throw new Error("Unable to update that schedule.");
+  }
+
+  const { error: siblingError } = await supabase.rpc(
+    "supersede_sibling_generated_recurrence_rules",
+    {
+      p_keep_rule_id: ruleId,
+      p_reason: "Schedule edited from event edit page"
+    }
+  );
+
+  if (siblingError) {
+    throw new Error("Unable to replace sibling schedules.");
+  }
+
+  const { data: rule } = await supabase
+    .from("recurrence_rules")
+    .select("financial_item_id")
+    .eq("id", ruleId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!rule) {
+    throw new Error("Unable to load that schedule.");
+  }
+
+  if (scheduleBasis === "weekday" && activeWeekdays.length > 1) {
+    for (const extraWeekday of activeWeekdays.slice(1)) {
+      const extraDueDates = generateDueDates({
+        anchorDate: generatedAnchorDate,
+        businessDayAdjustment,
+        count: generatedCount,
+        intervalCount,
+        intervalUnit,
+        ordinalWeek: ordinalWeek ?? null,
+        scheduleBasis,
+        shortMonthBehavior,
+        weekday: extraWeekday
+      });
+
+      const { error: scheduleError } = await supabase.rpc(
+        "add_generated_schedule_to_financial_item",
+        {
+          p_anchor_date: generatedAnchorDate,
+          p_anchor_day: null,
+          p_anchor_weekday: extraWeekday,
+          p_business_day_adjustment: businessDayAdjustment,
+          p_due_dates: extraDueDates,
+          p_financial_item_id: rule.financial_item_id,
+          p_interval_count: intervalCount,
+          p_interval_unit: intervalUnit,
+          p_mode: scheduleMode,
+          p_occurrence_count:
+            scheduleMode === "finite" ? generatedCount : null,
+          p_ordinal_week: null,
+          p_schedule_basis: scheduleBasis,
+          p_short_month_behavior: null
+        }
+      );
+
+      if (scheduleError) {
+        throw new Error("Unable to add that schedule.");
+      }
+    }
   }
 
   revalidatePath("/events");
@@ -395,6 +571,62 @@ async function updateFutureOccurrenceDates(
 
     if (error) {
       return "Unable to update future event dates.";
+    }
+  }
+
+  return null;
+}
+
+async function applyManualOccurrenceOverrides(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  {
+    manualRows,
+    recurrenceRuleId,
+    userId
+  }: {
+    manualRows: Array<{
+      amountStatus: string;
+      date: string;
+      expectedAmount: string;
+    }>;
+    recurrenceRuleId: string;
+    userId: string;
+  }
+) {
+  const { data: occurrences, error } = await supabase
+    .from("occurrences")
+    .select("id")
+    .eq("recurrence_rule_id", recurrenceRuleId)
+    .eq("user_id", userId)
+    .order("sequence_number", { ascending: true });
+
+  if (error) {
+    return "Unable to load manual events.";
+  }
+
+  for (const [index, occurrence] of (occurrences ?? []).entries()) {
+    const row = manualRows[index];
+    const status = row?.amountStatus ?? "unknown";
+    const amount =
+      status === "unknown"
+        ? null
+        : parseMajorAmountToMinor(row?.expectedAmount ?? "");
+
+    if (status !== "unknown" && amount === null) {
+      return `Enter a valid amount for ${row?.date ?? "manual date"}.`;
+    }
+
+    const { error: updateError } = await supabase
+      .from("occurrences")
+      .update({
+        amount_status: status as Database["public"]["Enums"]["amount_status"],
+        expected_amount_minor: amount
+      })
+      .eq("id", occurrence.id)
+      .eq("user_id", userId);
+
+    if (updateError) {
+      return "Unable to update manual event amounts.";
     }
   }
 

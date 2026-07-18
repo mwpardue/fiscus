@@ -34,25 +34,23 @@ export default async function NewEventPage({
   ]);
 
   return (
-    <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-2xl gap-6">
-        <header className="grid gap-3 border-b border-line pb-4">
+    <main className="min-h-screen px-3 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto grid w-full max-w-3xl gap-5">
+        <header className="grid gap-2 border-b border-line pb-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-mint">
               New event
             </p>
-            <h1 className="text-2xl font-semibold text-ink">New event</h1>
+            <h1 className="text-2xl font-semibold text-ink">Add event</h1>
           </div>
         </header>
 
-        <section className="mobile-action-surface rounded border border-line bg-white p-4 sm:p-5">
-          <EntryForm
-            accounts={accounts ?? []}
-            defaultCurrencyCode={profile?.default_currency_code ?? "USD"}
-            returnTo={params?.returnTo}
-            themeToken={profile?.theme_token ?? DEFAULT_THEME_TOKEN}
-          />
-        </section>
+        <EntryForm
+          accounts={accounts ?? []}
+          defaultCurrencyCode={profile?.default_currency_code ?? "USD"}
+          returnTo={params?.returnTo}
+          themeToken={profile?.theme_token ?? DEFAULT_THEME_TOKEN}
+        />
       </div>
     </main>
   );

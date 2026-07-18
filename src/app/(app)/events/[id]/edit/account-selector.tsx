@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fieldControlClass } from "@/app/(app)/entries/event-form-ui";
 
 export function EventAccountSelector({
   accounts,
@@ -26,7 +27,7 @@ export function EventAccountSelector({
         <select
           id="edit-event-account"
           name="accountChoice"
-          className="min-h-12 rounded border border-line bg-white px-3 text-base"
+          className={fieldControlClass}
           value={
             accountMode === "existing"
               ? selectedAccountId
@@ -70,7 +71,7 @@ export function EventAccountSelector({
           <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             New account name
             <input
-              className="min-h-12 rounded border border-line bg-white px-3 text-base"
+              className={fieldControlClass}
               name="counterpartyName"
               placeholder="Merchant, biller, payer, employer"
               required
@@ -79,7 +80,7 @@ export function EventAccountSelector({
           <label className="grid min-w-0 gap-2 text-sm font-medium text-ink">
             Account website
             <input
-              className="min-h-12 rounded border border-line bg-white px-3 text-base"
+              className={fieldControlClass}
               name="counterpartyWebsiteUrl"
               placeholder="att.com"
               type="text"
@@ -90,13 +91,13 @@ export function EventAccountSelector({
               Icon options
             </summary>
             <label className="mt-3 grid min-w-0 gap-2 rounded border border-line bg-paper p-3 text-sm font-medium text-ink">
-              Account icon
-              <input
-                accept="image/png,image/jpeg,image/webp"
-                className="min-h-12 w-full min-w-0 rounded border border-line bg-white px-3 py-2 text-sm"
-                name="accountIcon"
-                type="file"
-              />
+            Account icon
+            <input
+              accept="image/png,image/jpeg,image/webp"
+              className={fieldControlClass}
+              name="accountIcon"
+              type="file"
+            />
             </label>
           </details>
         </div>
