@@ -22,6 +22,11 @@ const archiveOccurrenceSchema = z.object({
   returnTo: z.string().optional()
 });
 
+const archiveSelectedOccurrencesSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+  returnTo: z.string().optional()
+});
+
 const completeOccurrenceSchema = z.object({
   amount: z.string().trim().min(1),
   completedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -121,6 +126,45 @@ export async function archiveOccurrenceAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/events");
+  revalidatePath("/events/rules");
+  redirect(getSafeReturnPath(parsed.data.returnTo, "/events"));
+}
+
+export async function archiveSelectedOccurrencesAction(formData: FormData) {
+  const parsed = archiveSelectedOccurrencesSchema.safeParse({
+    ids: formData.getAll("ids"),
+    returnTo: formData.get("returnTo") || undefined
+  });
+
+  if (!parsed.success) {
+    throw new Error("Choose at least one valid event to delete.");
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  await enforceRateLimit("eventMutation", user.id);
+
+  for (const id of parsed.data.ids) {
+    const { error } = await supabase.rpc("archive_occurrence", {
+      p_occurrence_id: id,
+      p_reason: "Archived from bulk event selection"
+    });
+
+    if (error) {
+      throw new Error("Unable to delete the selected events.");
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/events");
+  revalidatePath("/events/rules");
   redirect(getSafeReturnPath(parsed.data.returnTo, "/events"));
 }
 
@@ -213,6 +257,9 @@ function getSafeReturnPath(value: string | undefined, fallback: Route): Route {
     value === "/dashboard" ||
     value.startsWith("/dashboard?") ||
     value === "/events" ||
+    value.startsWith("/events?") ||
+    value === "/events/rules" ||
+    value.startsWith("/events/rules?") ||
     /^\/accounts\/[0-9a-f-]+\/edit$/i.test(value)
   ) {
     return value as Route;

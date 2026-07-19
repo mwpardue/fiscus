@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { EntityIcon } from "@/app/(app)/entity-icon";
 import { SwipeableEventCard } from "@/app/(app)/swipeable-event-card";
@@ -9,10 +10,12 @@ import {
   getRequestUser
 } from "@/lib/supabase/server";
 import {
+  archiveSelectedOccurrencesAction,
   archiveOccurrenceAction,
   completeOccurrenceFromCardAction,
   reopenOccurrenceFromCardAction
 } from "../occurrences/actions";
+import { EventSelectionActions } from "./event-selection-actions";
 
 type EventRow = {
   amount_status: "fixed" | "estimated" | "unknown";
@@ -32,7 +35,13 @@ type EventRow = {
 
 export const runtime = "edge";
 
-export default async function EventsPage() {
+export default async function EventsPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ q?: string }>;
+}) {
+  const search = await searchParams;
+  const query = normalizeSearchTerm(search?.q);
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();
 
@@ -52,10 +61,13 @@ export default async function EventsPage() {
       .from("counterparties")
       .select("id,name,icon_storage_path,brandfetch_icon_url")
   ]);
-  const eventRows = (events ?? []) as EventRow[];
+  const allEventRows = (events ?? []) as EventRow[];
   const accountById = new Map(
     (accounts ?? []).map((account) => [account.id, account])
   );
+  const eventRows = query
+    ? allEventRows.filter((event) => eventMatchesQuery(event, accountById, query))
+    : allEventRows;
   const icons = await resolveEntityIcons(
     supabase,
     eventRows.map((event) => {
@@ -84,14 +96,11 @@ export default async function EventsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-ink">Events</h1>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              className="inline-flex min-h-11 items-center rounded bg-mint px-4 text-sm font-semibold text-white"
-              href="/events/new"
-            >
-              New
-            </Link>
-          </div>
+          <EventSelectionActions
+            action={archiveSelectedOccurrencesAction}
+            hasEvents={!error && eventRows.length > 0}
+            returnTo={getEventsReturnTo(query)}
+          />
         </header>
 
         {error ? (
@@ -104,6 +113,35 @@ export default async function EventsPage() {
           Ongoing schedules are stored in generated batches. The Dashboard
           extends them as you view future months; this page shows the generated
           events currently stored.
+        </section>
+
+        <section className="grid gap-3 rounded border border-line bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <form action="/events" className="grid min-w-0 gap-2 sm:max-w-md">
+            <label className="text-sm font-semibold text-ink" htmlFor="event-search">
+              Search events
+            </label>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <input
+                className="min-h-11 min-w-0 rounded border border-line bg-white px-3 text-sm text-ink"
+                defaultValue={search?.q ?? ""}
+                id="event-search"
+                name="q"
+                placeholder="Search name, account, date, amount"
+                type="search"
+              />
+              <button className="min-h-11 rounded bg-ink px-4 text-sm font-semibold text-white">
+                Search
+              </button>
+            </div>
+          </form>
+          {query ? (
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded border border-line bg-paper px-4 text-sm font-semibold text-ink"
+              href="/events"
+            >
+              Clear
+            </Link>
+          ) : null}
         </section>
 
         <section className="grid gap-2">
@@ -166,6 +204,8 @@ export default async function EventsPage() {
                   : null;
             const isOverdue =
               event.lifecycle_status === "upcoming" && event.due_date < today;
+            const editHref =
+              `/events/${event.id}/edit?returnTo=${encodeURIComponent(getEventsReturnTo(query))}` as Route;
 
             return (
               <SwipeableEventCard
@@ -183,46 +223,46 @@ export default async function EventsPage() {
                 }
               >
                 <article
-                  className="relative grid gap-2 p-3 pr-14 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  className="flex min-w-0 p-3"
                 >
                   <Link
                     aria-label={`Edit ${event.financial_items?.name ?? "event"}`}
-                    className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded border border-line bg-white text-ink"
-                    href={`/events/${event.id}/edit?returnTo=${encodeURIComponent("/events")}`}
-                    title="Edit"
+                    className="event-selection-card grid min-w-0 flex-1 gap-3 rounded p-1 focus:outline-none focus:ring-2 focus:ring-mint sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    data-event-id={event.id}
+                    data-event-selection-card
+                    href={editHref}
                   >
-                    <PencilIcon />
-                  </Link>
-                  <div className="flex min-w-0 gap-3">
-                    <EntityIcon icon={icon} size="lg" />
-                    <div className="grid min-w-0 content-center gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-gray-700">
-                        <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
-                          {formatWeekday(event.due_date)}
-                        </span>
-                        <span>{formatEventDate(event.due_date)}</span>
-                        {account ? <span>- {account.name}</span> : null}
-                      </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        <h2 className="truncate font-semibold text-ink">
-                          {event.financial_items?.name ?? "Untitled"}
-                        </h2>
-                        <span className="rounded border border-line px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-gray-700">
-                          {event.financial_items?.kind ?? "item"}
-                        </span>
-                        {isOverdue ? (
-                          <span className="rounded border border-danger/30 px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-danger">
-                            overdue
+                    <div className="flex min-w-0 gap-3">
+                      <EntityIcon icon={icon} size="lg" />
+                      <div className="grid min-w-0 content-center gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-gray-700">
+                          <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold text-ink">
+                            {formatWeekday(event.due_date)}
                           </span>
-                        ) : null}
+                          <span>{formatEventDate(event.due_date)}</span>
+                          {account ? <span>- {account.name}</span> : null}
+                        </div>
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                          <h2 className="truncate font-semibold text-ink">
+                            {event.financial_items?.name ?? "Untitled"}
+                          </h2>
+                          <span className="rounded border border-line px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-gray-700">
+                            {event.financial_items?.kind ?? "item"}
+                          </span>
+                          {isOverdue ? (
+                            <span className="rounded border border-danger/30 px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-danger">
+                              overdue
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="sm:text-right">
-                    <p className="text-base font-semibold text-ink">
-                      {amountLabel}
-                    </p>
-                  </div>
+                    <div className="sm:text-right">
+                      <p className="text-base font-semibold text-ink">
+                        {amountLabel}
+                      </p>
+                    </div>
+                  </Link>
                 </article>
               </SwipeableEventCard>
             );
@@ -230,7 +270,9 @@ export default async function EventsPage() {
 
           {!error && eventRows.length === 0 ? (
             <div className="rounded border border-line bg-white p-5">
-              <p className="font-medium text-ink">No events yet.</p>
+              <p className="font-medium text-ink">
+                {query ? "No matching events." : "No events yet."}
+              </p>
             </div>
           ) : null}
         </section>
@@ -239,22 +281,43 @@ export default async function EventsPage() {
   );
 }
 
-function PencilIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  );
+function eventMatchesQuery(
+  event: EventRow,
+  accountById: Map<string, { name: string }>,
+  query: string
+) {
+  const account = event.financial_items?.counterparty_id
+    ? accountById.get(event.financial_items.counterparty_id)
+    : null;
+  const amountLabel =
+    event.amount_status === "unknown" || event.expected_amount_minor === null
+      ? "unknown"
+      : formatMinorAmount(event.expected_amount_minor, event.currency_code);
+  const text = [
+    event.financial_items?.name,
+    event.financial_items?.kind,
+    account?.name,
+    event.lifecycle_status,
+    event.amount_status,
+    event.due_date,
+    formatEventDate(event.due_date),
+    formatWeekday(event.due_date),
+    amountLabel,
+    event.currency_code
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return text.includes(query);
+}
+
+function getEventsReturnTo(query: string) {
+  return query ? `/events?q=${encodeURIComponent(query)}` : "/events";
+}
+
+function normalizeSearchTerm(value: string | undefined) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
 function formatEventDate(date: string) {

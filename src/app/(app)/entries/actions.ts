@@ -128,6 +128,7 @@ export async function updateEntryAction(formData: FormData) {
 
   revalidatePath("/entries");
   revalidatePath("/events");
+  revalidatePath("/events/rules");
   revalidatePath(`/entries/${parsed.data.id}/edit`);
   revalidatePath("/dashboard");
   redirect("/events");
@@ -203,6 +204,7 @@ export async function archiveEntryAction(formData: FormData) {
 
   revalidatePath("/entries");
   revalidatePath("/events");
+  revalidatePath("/events/rules");
   revalidatePath("/dashboard");
   redirect("/events");
 }

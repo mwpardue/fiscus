@@ -282,6 +282,7 @@ export async function updateEventPlanAction(formData: FormData) {
   });
 
   revalidatePath("/events");
+  revalidatePath("/events/rules");
   revalidatePath(`/events/${parsed.data.eventId}/edit`);
   revalidatePath("/dashboard");
   redirect(
@@ -403,6 +404,7 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
     }
 
     revalidatePath("/events");
+    revalidatePath("/events/rules");
     revalidatePath(`/events/${eventId}/edit`);
     revalidatePath("/dashboard");
     redirect(getSafeReturnTo(returnTo, `/events/${eventId}/edit` as Route));
@@ -534,6 +536,7 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
   }
 
   revalidatePath("/events");
+  revalidatePath("/events/rules");
   revalidatePath(`/events/${eventId}/edit`);
   revalidatePath("/dashboard");
   redirect(getSafeReturnTo(returnTo, `/events/${eventId}/edit` as Route));

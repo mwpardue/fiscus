@@ -362,6 +362,21 @@ main {
   z-index: 1;
 }
 
+.event-selection-card {
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.event-selection-card-active {
+  cursor: pointer;
+}
+
+.event-selection-card-selected {
+  background: rgb(var(--color-accent) / 0.12);
+  box-shadow: inset 0 0 0 1px rgb(var(--color-accent) / 0.35);
+}
+
 .swipe-card-exiting .swipe-card-content {
   transition: transform 220ms ease-in;
 }
