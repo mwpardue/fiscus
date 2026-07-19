@@ -15,7 +15,7 @@ import {
   summarizeOccurrences,
   type DashboardOccurrence
 } from "@/lib/occurrences";
-import { ensureOngoingOccurrencesThrough } from "@/lib/recurrence/ensure-generated";
+import { createServerTimer } from "@/lib/server-timing";
 import {
   createServerSupabaseClient,
   getRequestUser
@@ -42,8 +42,10 @@ export default async function DashboardPage({
 }: {
   searchParams?: Promise<{ day?: string; month?: string }>;
 }) {
+  const timer = createServerTimer("dashboard.page");
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();
+  timer.mark("auth");
 
   if (!user) {
     redirect("/login");
@@ -62,44 +64,68 @@ export default async function DashboardPage({
         : today,
     visibleStart:
       provisionalQueryBounds.visibleStart < today
-        ? provisionalQueryBounds.visibleStart
-        : today
+      ? provisionalQueryBounds.visibleStart
+      : today
   };
-  await ensureOngoingOccurrencesThrough(supabase, queryBounds.visibleEnd);
+  timer.mark("bounds", {
+    selectedMonth,
+    visibleEnd: queryBounds.visibleEnd,
+    visibleStart: queryBounds.visibleStart
+  });
   const [
     { data: profile },
     { data: occurrences, error },
     { data: payments },
     { data: counterparties }
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "balance_anchor_amount_minor,balance_anchor_recorded_at,default_currency_code,theme_token,week_starts_on"
-      )
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("occurrences")
-      .select(
-        "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id)"
-      )
-      .eq("user_id", user.id)
-      .is("archived_at", null)
-      .eq("lifecycle_status", "upcoming")
-      .gte("due_date", queryBounds.visibleStart)
-      .lte("due_date", queryBounds.visibleEnd)
-      .order("due_date", { ascending: true }),
-    supabase
-      .from("payments")
-      .select("amount_minor,created_at,kind,status")
-      .eq("user_id", user.id)
-      .eq("status", "active"),
-    supabase
-      .from("counterparties")
-      .select("id,name")
-      .eq("user_id", user.id)
+    timeQuery(
+      timer,
+      "profile",
+      supabase
+        .from("profiles")
+        .select(
+          "balance_anchor_amount_minor,balance_anchor_recorded_at,default_currency_code,theme_token,week_starts_on"
+        )
+        .eq("user_id", user.id)
+        .maybeSingle()
+    ),
+    timeQuery(
+      timer,
+      "occurrences",
+      supabase
+        .from("occurrences")
+        .select(
+          "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,color_token,counterparty_id)"
+        )
+        .eq("user_id", user.id)
+        .is("archived_at", null)
+        .eq("lifecycle_status", "upcoming")
+        .gte("due_date", queryBounds.visibleStart)
+        .lte("due_date", queryBounds.visibleEnd)
+        .order("due_date", { ascending: true })
+    ),
+    timeQuery(
+      timer,
+      "payments",
+      supabase
+        .from("payments")
+        .select("amount_minor,created_at,kind,status")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+    ),
+    timeQuery(
+      timer,
+      "counterparties",
+      supabase
+        .from("counterparties")
+        .select("id,name")
+        .eq("user_id", user.id)
+    )
   ]);
+  timer.mark("queries", {
+    occurrences: occurrences?.length ?? 0,
+    payments: payments?.length ?? 0
+  });
 
   const defaultCurrencyCode = profile?.default_currency_code ?? "USD";
   const themeToken = profile?.theme_token ?? DEFAULT_THEME_TOKEN;
@@ -157,10 +183,16 @@ export default async function DashboardPage({
   const nextCalendarFrame = buildCalendarFrame(calendarFrame.nextMonth, weekStartsOn);
   const nextMonthPrefetchEnd =
     expandCalendarFrameBounds(nextCalendarFrame).visibleEnd;
+  timer.done({
+    selectedMonth,
+    visibleEnd: calendarFrame.visibleEnd
+  });
 
   return (
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
-      <DashboardPrefetch visibleEnd={nextMonthPrefetchEnd} />
+      <DashboardPrefetch
+        visibleEnds={[queryBounds.visibleEnd, nextMonthPrefetchEnd]}
+      />
       <div className="mx-auto grid w-full max-w-[108rem] gap-5">
         <header className="border-b border-line pb-4">
           <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -461,6 +493,17 @@ export default async function DashboardPage({
       </div>
     </main>
   );
+}
+
+async function timeQuery<T>(
+  timer: ReturnType<typeof createServerTimer>,
+  label: string,
+  promise: PromiseLike<T>
+) {
+  const startedAt = Date.now();
+  const result = await promise;
+  timer.mark(label, { queryMs: Date.now() - startedAt });
+  return result;
 }
 
 function entryAccentStyle(

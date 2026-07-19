@@ -55,11 +55,13 @@ export default async function EventsPage({
       .select(
         "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,counterparty_id,icon_storage_path,brandfetch_icon_url)"
       )
+      .eq("user_id", user.id)
       .is("archived_at", null)
       .order("due_date", { ascending: true }),
     supabase
       .from("counterparties")
       .select("id,name,icon_storage_path,brandfetch_icon_url")
+      .eq("user_id", user.id)
   ]);
   const allEventRows = (events ?? []) as EventRow[];
   const accountById = new Map(

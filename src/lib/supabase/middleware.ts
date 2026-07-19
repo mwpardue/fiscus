@@ -13,6 +13,7 @@ const PROTECTED_PATH_PREFIXES = [
 ];
 
 export async function updateSession(request: NextRequest) {
+  const startedAt = Date.now();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.delete("x-user-email");
   requestHeaders.delete("x-user-id");
@@ -54,6 +55,11 @@ export async function updateSession(request: NextRequest) {
   const isProtectedRoute = PROTECTED_PATH_PREFIXES.some((pathPrefix) =>
     request.nextUrl.pathname.startsWith(pathPrefix)
   );
+  console.info("[perf] middleware auth", {
+    elapsedMs: Date.now() - startedAt,
+    path: request.nextUrl.pathname,
+    protected: isProtectedRoute
+  });
 
   if (isProtectedRoute && !user) {
     const url = request.nextUrl.clone();

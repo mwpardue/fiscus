@@ -21,6 +21,7 @@ export default async function AccountsPage() {
   const { data: accounts, error } = await supabase
     .from("counterparties")
     .select("id,name,website_url,icon_storage_path,brandfetch_icon_url,updated_at")
+    .eq("user_id", user.id)
     .order("name", { ascending: true });
   const icons = await resolveEntityIcons(
     supabase,

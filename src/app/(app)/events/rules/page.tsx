@@ -48,10 +48,12 @@ type PlanRow = {
 };
 
 type OccurrenceSummary = {
-  archived_at: string | null;
-  due_date: string;
-  lifecycle_status: "upcoming" | "paid" | "received" | "skipped";
-  recurrence_rule_id: string | null;
+  archived_count: number;
+  first_due_date: string | null;
+  latest_due_date: string | null;
+  open_count: number;
+  recurrence_rule_id: string;
+  total_count: number;
 };
 
 export const runtime = "edge";
@@ -68,35 +70,33 @@ export default async function RecurrenceRulesPage() {
     { data: rules, error },
     { data: plans },
     { data: accounts },
-    { data: occurrences }
+    { data: occurrenceSummaries }
   ] = await Promise.all([
       supabase
         .from("recurrence_rules")
         .select(
           "id,financial_item_id,mode,interval_unit,interval_count,anchor_date,anchor_day,anchor_weekday,ordinal_week,schedule_basis,short_month_behavior,ends_on,occurrence_count,converted_from_rule_id,status,created_at,updated_at,business_day_adjustment"
         )
+        .eq("user_id", user.id)
         .order("status", { ascending: true })
         .order("created_at", { ascending: false }),
       supabase
         .from("financial_items")
         .select(
           "id,name,kind,status,counterparty_id,currency_code,default_amount_status,default_expected_amount_minor"
-        ),
-      supabase.from("counterparties").select("id,name"),
-      supabase
-        .from("occurrences")
-        .select("recurrence_rule_id,due_date,lifecycle_status,archived_at")
-        .not("recurrence_rule_id", "is", null)
+        )
+        .eq("user_id", user.id),
+      supabase.from("counterparties").select("id,name").eq("user_id", user.id),
+      supabase.rpc("get_recurrence_rule_occurrence_summaries")
     ]);
   const ruleRows = (rules ?? []) as RuleRow[];
-  const occurrenceRows = (occurrences ?? []) as OccurrenceSummary[];
   const planById = new Map(
     ((plans ?? []) as PlanRow[]).map((plan) => [plan.id, plan])
   );
   const accountById = new Map(
     (accounts ?? []).map((account) => [account.id, account.name])
   );
-  const summaries = summarizeOccurrencesByRule(occurrenceRows);
+  const summaries = summarizeOccurrencesByRule(occurrenceSummaries ?? []);
 
   return (
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
@@ -318,34 +318,13 @@ function summarizeOccurrencesByRule(rows: OccurrenceSummary[]) {
   >();
 
   for (const row of rows) {
-    if (!row.recurrence_rule_id) {
-      continue;
-    }
-
-    const summary = summaries.get(row.recurrence_rule_id) ?? {
-      archived: 0,
-      firstDueDate: null,
-      latestDueDate: null,
-      open: 0,
-      total: 0
-    };
-    summary.total += 1;
-
-    if (row.archived_at) {
-      summary.archived += 1;
-    } else if (row.lifecycle_status === "upcoming") {
-      summary.open += 1;
-    }
-
-    if (!summary.firstDueDate || row.due_date < summary.firstDueDate) {
-      summary.firstDueDate = row.due_date;
-    }
-
-    if (!summary.latestDueDate || row.due_date > summary.latestDueDate) {
-      summary.latestDueDate = row.due_date;
-    }
-
-    summaries.set(row.recurrence_rule_id, summary);
+    summaries.set(row.recurrence_rule_id, {
+      archived: row.archived_count,
+      firstDueDate: row.first_due_date,
+      latestDueDate: row.latest_due_date,
+      open: row.open_count,
+      total: row.total_count
+    });
   }
 
   return summaries;

@@ -22,38 +22,38 @@ type OngoingRule = {
 
 export async function ensureOngoingOccurrencesThrough(
   supabase: ServerSupabaseClient,
-  visibleEnd: string
+  visibleEnd: string,
+  userId: string
 ) {
+  let generatedCount = 0;
   const { data: rules } = await supabase
     .from("recurrence_rules")
     .select(
       "id,anchor_date,anchor_weekday,business_day_adjustment,interval_count,interval_unit,ordinal_week,schedule_basis,short_month_behavior"
     )
+    .eq("user_id", userId)
     .eq("mode", "ongoing")
     .eq("status", "active");
   const ongoingRules = (rules ?? []) as OngoingRule[];
 
   if (ongoingRules.length === 0) {
-    return;
+    return generatedCount;
   }
 
-  const { data: occurrences } = await supabase
-    .from("occurrences")
-    .select("recurrence_rule_id,due_date")
-    .in(
-      "recurrence_rule_id",
-      ongoingRules.map((rule) => rule.id)
-    )
-    .is("archived_at", null)
-    .order("due_date", { ascending: true });
+  const { data: summaries } = await supabase.rpc(
+    "get_recurrence_rule_occurrence_summaries"
+  );
   const maxDueDateByRule = new Map<string, string>();
 
-  for (const occurrence of occurrences ?? []) {
-    if (!occurrence.recurrence_rule_id) {
+  for (const summary of summaries ?? []) {
+    if (!summary.latest_unarchived_due_date) {
       continue;
     }
 
-    maxDueDateByRule.set(occurrence.recurrence_rule_id, occurrence.due_date);
+    maxDueDateByRule.set(
+      summary.recurrence_rule_id,
+      summary.latest_unarchived_due_date
+    );
   }
 
   for (const rule of ongoingRules) {
@@ -76,12 +76,18 @@ export async function ensureOngoingOccurrencesThrough(
       continue;
     }
 
-    await supabase.rpc("add_generated_occurrences_to_rule", {
-      p_due_dates: dueDates,
-      p_reason: "Extended from dashboard calendar view",
-      p_rule_id: rule.id
-    });
+    const { data: insertedCount } = await supabase.rpc(
+      "add_generated_occurrences_to_rule",
+      {
+        p_due_dates: dueDates,
+        p_reason: "Extended from dashboard calendar view",
+        p_rule_id: rule.id
+      }
+    );
+    generatedCount += insertedCount ?? 0;
   }
+
+  return generatedCount;
 }
 
 function generateDueDatesThrough(rule: OngoingRule, visibleEnd: string) {

@@ -401,6 +401,18 @@ export type Database = {
         };
         Returns: string;
       };
+      get_recurrence_rule_occurrence_summaries: {
+        Args: Record<PropertyKey, never>;
+        Returns: Array<{
+          archived_count: number;
+          first_due_date: string | null;
+          latest_due_date: string | null;
+          latest_unarchived_due_date: string | null;
+          open_count: number;
+          recurrence_rule_id: string;
+          total_count: number;
+        }>;
+      };
       convert_generated_recurrence_rule_to_manual: {
         Args: {
           p_due_dates: string[];

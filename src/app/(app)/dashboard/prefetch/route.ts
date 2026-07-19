@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureOngoingOccurrencesThrough } from "@/lib/recurrence/ensure-generated";
+import { createServerTimer } from "@/lib/server-timing";
 import {
   createServerSupabaseClient,
   getRequestUser
@@ -10,6 +11,7 @@ export const runtime = "edge";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(request: Request) {
+  const timer = createServerTimer("dashboard.prefetch");
   const user = await getRequestUser();
 
   if (!user) {
@@ -25,7 +27,12 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createServerSupabaseClient();
-  await ensureOngoingOccurrencesThrough(supabase, visibleEnd);
+  const generatedCount = await ensureOngoingOccurrencesThrough(
+    supabase,
+    visibleEnd,
+    user.id
+  );
+  timer.done({ generatedCount, visibleEnd });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ generatedCount, ok: true });
 }
