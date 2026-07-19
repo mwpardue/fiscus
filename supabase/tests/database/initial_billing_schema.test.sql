@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(49);
+select plan(56);
 
 insert into auth.users (id, email)
 values
@@ -584,6 +584,142 @@ select throws_ok(
   '42501',
   'Completed, skipped, and archived occurrences are locked',
   'skipped occurrence is fully locked'
+);
+
+select lives_ok(
+  $$
+    insert into public.recurrence_rules (
+      id,
+      user_id,
+      financial_item_id,
+      mode,
+      interval_unit,
+      interval_count,
+      anchor_date,
+      anchor_day,
+      short_month_behavior
+    ) values (
+      '11111111-1111-4111-8111-111111111104',
+      '11111111-1111-4111-8111-111111111111',
+      '11111111-1111-4111-8111-111111111101',
+      'ongoing',
+      'month',
+      1,
+      '2026-08-01',
+      1,
+      'last_day'
+    );
+
+    insert into public.occurrences (
+      id,
+      user_id,
+      financial_item_id,
+      recurrence_rule_id,
+      sequence_number,
+      source,
+      due_date,
+      amount_status,
+      expected_amount_minor,
+      currency_code
+    ) values
+      (
+        '11111111-1111-4111-8111-111111111105',
+        '11111111-1111-4111-8111-111111111111',
+        '11111111-1111-4111-8111-111111111101',
+        '11111111-1111-4111-8111-111111111104',
+        1,
+        'generated',
+        '2026-08-01',
+        'fixed',
+        5000,
+        'USD'
+      ),
+      (
+        '11111111-1111-4111-8111-111111111106',
+        '11111111-1111-4111-8111-111111111111',
+        '11111111-1111-4111-8111-111111111101',
+        '11111111-1111-4111-8111-111111111104',
+        2,
+        'generated',
+        '2026-09-01',
+        'fixed',
+        5000,
+        'USD'
+      ),
+      (
+        '11111111-1111-4111-8111-111111111107',
+        '11111111-1111-4111-8111-111111111111',
+        '11111111-1111-4111-8111-111111111101',
+        '11111111-1111-4111-8111-111111111104',
+        3,
+        'generated',
+        '2026-10-01',
+        'fixed',
+        5000,
+        'USD'
+      )
+  $$,
+  'owner can seed a generated recurrence cleanup case'
+);
+select lives_ok(
+  $$
+    select public.complete_occurrence(
+      '11111111-1111-4111-8111-111111111105',
+      5000,
+      '2026-08-01',
+      null
+    )
+  $$,
+  'owner can complete one generated event before archiving its rule'
+);
+select lives_ok(
+  $$
+    select public.archive_recurrence_rule(
+      '11111111-1111-4111-8111-111111111104',
+      'Clean up duplicate generated schedule'
+    )
+  $$,
+  'owner can archive a single recurrence rule'
+);
+select results_eq(
+  $$
+    select status::text
+    from public.recurrence_rules
+    where id = '11111111-1111-4111-8111-111111111104'
+  $$,
+  array['archived'::text],
+  'archiving a recurrence rule marks only that rule archived'
+);
+select results_eq(
+  $$
+    select count(*)
+    from public.occurrences
+    where recurrence_rule_id = '11111111-1111-4111-8111-111111111104'
+      and lifecycle_status = 'upcoming'
+      and archived_at is not null
+  $$,
+  array[2::bigint],
+  'archiving a recurrence rule archives its upcoming generated events'
+);
+select results_eq(
+  $$
+    select lifecycle_status::text || ':' || (archived_at is null)::text
+    from public.occurrences
+    where id = '11111111-1111-4111-8111-111111111105'
+  $$,
+  array['paid:true'::text],
+  'archiving a recurrence rule keeps completed history visible'
+);
+select results_eq(
+  $$
+    select count(*)
+    from public.audit_events
+    where entity_id = '11111111-1111-4111-8111-111111111101'
+      and event_type = 'schedule_edited'
+      and reason = 'Clean up duplicate generated schedule'
+  $$,
+  array[1::bigint],
+  'archiving a recurrence rule is audited'
 );
 
 select has_table(

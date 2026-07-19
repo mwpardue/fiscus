@@ -436,6 +436,10 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["financial_items"]["Row"];
       };
+      archive_recurrence_rule: {
+        Args: { p_rule_id: string; p_reason?: string | null };
+        Returns: Database["public"]["Tables"]["recurrence_rules"]["Row"];
+      };
       archive_occurrence: {
         Args: { p_occurrence_id: string; p_reason?: string | null };
         Returns: Database["public"]["Tables"]["occurrences"]["Row"];

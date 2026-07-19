@@ -24,6 +24,7 @@ type EventRow = {
   expected_amount_minor: number | null;
   id: string;
   lifecycle_status: "upcoming" | "paid" | "received" | "skipped";
+  recurrence_rule_id: string;
   financial_items: {
     brandfetch_icon_url: string | null;
     counterparty_id: string | null;
@@ -38,10 +39,11 @@ export const runtime = "edge";
 export default async function EventsPage({
   searchParams
 }: {
-  searchParams?: Promise<{ q?: string }>;
+  searchParams?: Promise<{ q?: string; ruleId?: string }>;
 }) {
   const search = await searchParams;
   const query = normalizeSearchTerm(search?.q);
+  const ruleId = normalizeRuleId(search?.ruleId);
   const supabase = await createServerSupabaseClient();
   const user = await getRequestUser();
 
@@ -49,15 +51,20 @@ export default async function EventsPage({
     redirect("/login");
   }
 
+  let eventsQuery = supabase
+    .from("occurrences")
+    .select(
+      "id,recurrence_rule_id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,counterparty_id,icon_storage_path,brandfetch_icon_url)"
+    )
+    .eq("user_id", user.id)
+    .is("archived_at", null);
+
+  if (ruleId) {
+    eventsQuery = eventsQuery.eq("recurrence_rule_id", ruleId);
+  }
+
   const [{ data: events, error }, { data: accounts }] = await Promise.all([
-    supabase
-      .from("occurrences")
-      .select(
-        "id,due_date,amount_status,expected_amount_minor,currency_code,lifecycle_status,financial_items(name,kind,counterparty_id,icon_storage_path,brandfetch_icon_url)"
-      )
-      .eq("user_id", user.id)
-      .is("archived_at", null)
-      .order("due_date", { ascending: true }),
+    eventsQuery.order("due_date", { ascending: true }),
     supabase
       .from("counterparties")
       .select("id,name,icon_storage_path,brandfetch_icon_url")
@@ -89,6 +96,7 @@ export default async function EventsPage({
   const iconByEventId = new Map(
     eventRows.map((event, index) => [event.id, icons[index]])
   );
+  const eventsReturnTo = getEventsReturnTo({ query, ruleId });
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -101,7 +109,7 @@ export default async function EventsPage({
           <EventSelectionActions
             action={archiveSelectedOccurrencesAction}
             hasEvents={!error && eventRows.length > 0}
-            returnTo={getEventsReturnTo(query)}
+            returnTo={eventsReturnTo}
           />
         </header>
 
@@ -119,6 +127,9 @@ export default async function EventsPage({
 
         <section className="grid gap-3 rounded border border-line bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <form action="/events" className="grid min-w-0 gap-2 sm:max-w-md">
+            {ruleId ? (
+              <input name="ruleId" type="hidden" value={ruleId} />
+            ) : null}
             <label className="text-sm font-semibold text-ink" htmlFor="event-search">
               Search events
             </label>
@@ -136,7 +147,7 @@ export default async function EventsPage({
               </button>
             </div>
           </form>
-          {query ? (
+          {query || ruleId ? (
             <Link
               className="inline-flex min-h-11 items-center justify-center rounded border border-line bg-paper px-4 text-sm font-semibold text-ink"
               href="/events"
@@ -172,7 +183,11 @@ export default async function EventsPage({
                 ? (
                     <form action={completeOccurrenceFromCardAction}>
                       <input name="id" type="hidden" value={event.id} />
-                      <input name="returnTo" type="hidden" value="/events" />
+                      <input
+                        name="returnTo"
+                        type="hidden"
+                        value={eventsReturnTo}
+                      />
                       <input
                         name="completedOn"
                         type="hidden"
@@ -197,7 +212,7 @@ export default async function EventsPage({
                   ? (
                       <form action={reopenOccurrenceFromCardAction}>
                         <input name="id" type="hidden" value={event.id} />
-                        <input name="returnTo" type="hidden" value="/events" />
+                        <input name="returnTo" type="hidden" value={eventsReturnTo} />
                         <button className="swipe-complete-action" type="submit">
                           Unmark
                         </button>
@@ -207,7 +222,7 @@ export default async function EventsPage({
             const isOverdue =
               event.lifecycle_status === "upcoming" && event.due_date < today;
             const editHref =
-              `/events/${event.id}/edit?returnTo=${encodeURIComponent(getEventsReturnTo(query))}` as Route;
+              `/events/${event.id}/edit?returnTo=${encodeURIComponent(eventsReturnTo)}` as Route;
 
             return (
               <SwipeableEventCard
@@ -217,7 +232,7 @@ export default async function EventsPage({
                 trailingAction={
                   <form action={archiveOccurrenceAction}>
                     <input name="id" type="hidden" value={event.id} />
-                    <input name="returnTo" type="hidden" value="/events" />
+                    <input name="returnTo" type="hidden" value={eventsReturnTo} />
                     <button className="swipe-delete-action" type="submit">
                       Delete
                     </button>
@@ -273,7 +288,7 @@ export default async function EventsPage({
           {!error && eventRows.length === 0 ? (
             <div className="rounded border border-line bg-white p-5">
               <p className="font-medium text-ink">
-                {query ? "No matching events." : "No events yet."}
+                {query || ruleId ? "No matching events." : "No events yet."}
               </p>
             </div>
           ) : null}
@@ -314,12 +329,38 @@ function eventMatchesQuery(
   return text.includes(query);
 }
 
-function getEventsReturnTo(query: string) {
-  return query ? `/events?q=${encodeURIComponent(query)}` : "/events";
+function getEventsReturnTo({
+  query,
+  ruleId
+}: {
+  query: string;
+  ruleId: string | null;
+}) {
+  const params = new URLSearchParams();
+
+  if (query) {
+    params.set("q", query);
+  }
+
+  if (ruleId) {
+    params.set("ruleId", ruleId);
+  }
+
+  const value = params.toString();
+  return value ? `/events?${value}` : "/events";
 }
 
 function normalizeSearchTerm(value: string | undefined) {
   return value?.trim().toLowerCase() ?? "";
+}
+
+function normalizeRuleId(value: string | undefined) {
+  const normalized = value?.trim() ?? "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    normalized
+  )
+    ? normalized
+    : null;
 }
 
 function formatEventDate(date: string) {

@@ -11,6 +11,7 @@ import {
   createServerSupabaseClient,
   getRequestUser
 } from "@/lib/supabase/server";
+import { ArchiveRuleForm } from "./archive-rule-form";
 
 type RuleRow = {
   anchor_date: string | null;
@@ -165,14 +166,23 @@ export default async function RecurrenceRulesPage() {
                       {formatDefaultAmount(plan)}
                     </p>
                   </div>
-                  <Link
-                    className="inline-flex min-h-10 items-center justify-center rounded border border-line bg-paper px-3 text-sm font-semibold text-ink"
-                    href={`/events?${new URLSearchParams({
-                      q: plan?.name ?? ""
-                    }).toString()}` as Route}
-                  >
-                    Find events
-                  </Link>
+                  <div className="flex flex-wrap gap-2 sm:justify-end">
+                    {rule.status === "active" ? (
+                      <ArchiveRuleForm
+                        openCount={summary.open}
+                        planName={plan?.name ?? "Missing plan"}
+                        ruleId={rule.id}
+                      />
+                    ) : null}
+                    <Link
+                      className="inline-flex min-h-10 items-center justify-center rounded border border-line bg-paper px-3 text-sm font-semibold text-ink"
+                      href={`/events?${new URLSearchParams({
+                        ruleId: rule.id
+                      }).toString()}` as Route}
+                    >
+                      Find events
+                    </Link>
+                  </div>
                 </div>
 
                 <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">

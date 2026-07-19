@@ -166,6 +166,11 @@ const updateGeneratedScheduleSchema = z
     }
   });
 
+const archiveRecurrenceRuleSchema = z.object({
+  returnTo: z.string().trim().optional(),
+  ruleId: z.string().uuid()
+});
+
 export async function updateEventPlanAction(formData: FormData) {
   const parsed = updateEventPlanSchema.safeParse({
     accountMode: formData.get("accountMode") ?? "none",
@@ -542,6 +547,42 @@ export async function updateGeneratedScheduleAction(formData: FormData) {
   redirect(getSafeReturnTo(returnTo, `/events/${eventId}/edit` as Route));
 }
 
+export async function archiveRecurrenceRuleAction(formData: FormData) {
+  const parsed = archiveRecurrenceRuleSchema.safeParse({
+    returnTo: formData.get("returnTo") || undefined,
+    ruleId: formData.get("ruleId")
+  });
+
+  if (!parsed.success) {
+    throw new Error("Choose a recurrence rule to archive.");
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  await enforceRateLimit("planMutation", user.id);
+
+  const { error } = await supabase.rpc("archive_recurrence_rule", {
+    p_reason: "Recurrence rule archived from rules page",
+    p_rule_id: parsed.data.ruleId
+  });
+
+  if (error) {
+    throw new Error("Unable to archive that recurrence rule.");
+  }
+
+  revalidatePath("/events");
+  revalidatePath("/events/rules");
+  revalidatePath("/dashboard");
+  redirect(getSafeReturnTo(parsed.data.returnTo, "/events/rules" as Route));
+}
+
 async function updateFutureOccurrenceDates(
   formData: FormData,
   financialItemId: string,
@@ -652,6 +693,9 @@ function getSafeReturnTo(
     returnTo === "/dashboard" ||
     returnTo.startsWith("/dashboard?") ||
     returnTo === "/events" ||
+    returnTo.startsWith("/events?") ||
+    returnTo === "/events/rules" ||
+    returnTo.startsWith("/events/rules?") ||
     /^\/accounts\/[0-9a-f-]+\/edit$/i.test(returnTo)
   ) {
     return returnTo as Route;
