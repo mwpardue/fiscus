@@ -279,7 +279,7 @@ export default async function DashboardPage({
 
           </section>
 
-          <aside className="order-2 grid gap-4 xl:sticky xl:top-4 xl:col-start-2 xl:row-span-2 xl:row-start-1">
+          <aside className="relative z-10 order-2 grid gap-4 xl:sticky xl:top-4 xl:col-start-2 xl:row-span-2 xl:row-start-1">
             <CalendarNavigation
               calendar={calendar}
               selectedDay={selectedDay}
