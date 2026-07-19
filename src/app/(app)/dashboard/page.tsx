@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
@@ -380,7 +381,7 @@ export default async function DashboardPage({
                       </div>
 
                       <div className="grid gap-2">
-                        {week.occurrences.map((occurrence) => {
+                        {week.occurrences.map((occurrence, index) => {
                   const amountLabel =
                     occurrence.amount_status === "unknown"
                       ? "Unknown"
@@ -395,6 +396,9 @@ export default async function DashboardPage({
                     selectedMonth,
                     selectedDay ?? undefined
                   );
+                  const hasDayChanged =
+                    index > 0 &&
+                    week.occurrences[index - 1]?.due_date !== occurrence.due_date;
                   const leadingAction =
                     occurrence.lifecycle_status === "upcoming" &&
                     occurrence.amount_status !== "unknown" &&
@@ -421,66 +425,73 @@ export default async function DashboardPage({
                       : null;
 
                           return (
-                            <SwipeableEventCard
-                              key={occurrence.id}
-                              leadingAction={leadingAction}
-                              trailingAction={
-                                <form action={archiveOccurrenceAction}>
-                                  <input name="id" type="hidden" value={occurrence.id} />
-                                  <input name="returnTo" type="hidden" value={returnTo} />
-                                  <button className="swipe-delete-action" type="submit">
-                                    Delete
-                                  </button>
-                                </form>
-                              }
-                            >
-                              <Link
-                                aria-label={`Edit ${occurrence.financial_items?.name ?? "event"}`}
-                                className="grid min-w-0 grid-cols-[3.25rem_minmax(0,1fr)_minmax(4.75rem,auto)] items-center gap-2 rounded border border-line bg-paper p-2.5 sm:grid-cols-[3.5rem_minmax(0,1fr)_minmax(7rem,auto)] sm:gap-3 sm:p-3"
-                                href={buildEditEventHref(occurrence.id, returnTo)}
-                                style={entryAccentStyle(
-                                  occurrence.financial_items?.color_token,
-                                  themeToken
-                                )}
+                            <Fragment key={occurrence.id}>
+                              {hasDayChanged ? (
+                                <div
+                                  aria-hidden="true"
+                                  className="mx-auto my-1 h-px w-[90%] bg-line"
+                                />
+                              ) : null}
+                              <SwipeableEventCard
+                                leadingAction={leadingAction}
+                                trailingAction={
+                                  <form action={archiveOccurrenceAction}>
+                                    <input name="id" type="hidden" value={occurrence.id} />
+                                    <input name="returnTo" type="hidden" value={returnTo} />
+                                    <button className="swipe-delete-action" type="submit">
+                                      Delete
+                                    </button>
+                                  </form>
+                                }
                               >
-                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded border border-line bg-white sm:h-12 sm:w-12">
-                                  <span className="text-[0.6875rem] font-semibold uppercase leading-none text-gray-700">
-                                    {formatWeekday(occurrence.due_date)}
-                                  </span>
-                                  <span className="text-base font-semibold leading-none text-ink">
-                                    {formatDayOfMonth(occurrence.due_date)}
-                                  </span>
-                                </div>
-                                <div className="grid min-w-0 gap-1">
-                                  <h3 className="truncate font-semibold text-ink">
-                                    {occurrence.financial_items?.name ?? "Untitled"}
-                                  </h3>
-                                  <p className="truncate text-xs text-gray-700 sm:text-sm">
-                                    {[
-                                      account?.name,
-                                      occurrence.financial_items?.kind ?? "item"
-                                    ]
-                                      .filter(Boolean)
-                                      .join(" · ")}
-                                  </p>
-                                </div>
-                                <div className="grid min-w-0 justify-items-end gap-1 text-right">
-                                  <p className="whitespace-nowrap text-sm font-semibold text-ink sm:text-base">
-                                    {amountLabel}
-                                  </p>
-                                  <div className="grid justify-items-end gap-1 sm:flex sm:justify-end">
-                                    <span className="rounded border border-line bg-white px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase text-gray-700 sm:px-2 sm:text-[0.6875rem]">
-                                      {occurrence.amount_status}
+                                <Link
+                                  aria-label={`Edit ${occurrence.financial_items?.name ?? "event"}`}
+                                  className="grid min-w-0 grid-cols-[3.25rem_minmax(0,1fr)_minmax(4.75rem,auto)] items-center gap-2 rounded border border-line bg-paper p-2.5 sm:grid-cols-[3.5rem_minmax(0,1fr)_minmax(7rem,auto)] sm:gap-3 sm:p-3"
+                                  href={buildEditEventHref(occurrence.id, returnTo)}
+                                  style={entryAccentStyle(
+                                    occurrence.financial_items?.color_token,
+                                    themeToken
+                                  )}
+                                >
+                                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded border border-line bg-white sm:h-12 sm:w-12">
+                                    <span className="text-[0.6875rem] font-semibold uppercase leading-none text-gray-700">
+                                      {formatWeekday(occurrence.due_date)}
                                     </span>
-                                    {isOverdue(occurrence, today) ? (
-                                      <span className="rounded border border-danger/30 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase text-danger sm:px-2 sm:text-[0.6875rem]">
-                                        Overdue
-                                      </span>
-                                    ) : null}
+                                    <span className="text-base font-semibold leading-none text-ink">
+                                      {formatDayOfMonth(occurrence.due_date)}
+                                    </span>
                                   </div>
-                                </div>
-                              </Link>
-                            </SwipeableEventCard>
+                                  <div className="grid min-w-0 gap-1">
+                                    <h3 className="truncate font-semibold text-ink">
+                                      {occurrence.financial_items?.name ?? "Untitled"}
+                                    </h3>
+                                    <p className="truncate text-xs text-gray-700 sm:text-sm">
+                                      {[
+                                        account?.name,
+                                        occurrence.financial_items?.kind ?? "item"
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
+                                  </div>
+                                  <div className="grid min-w-0 justify-items-end gap-1 text-right">
+                                    <p className="whitespace-nowrap text-sm font-semibold text-ink sm:text-base">
+                                      {amountLabel}
+                                    </p>
+                                    <div className="grid justify-items-end gap-1 sm:flex sm:justify-end">
+                                      <span className="rounded border border-line bg-white px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase text-gray-700 sm:px-2 sm:text-[0.6875rem]">
+                                        {occurrence.amount_status}
+                                      </span>
+                                      {isOverdue(occurrence, today) ? (
+                                        <span className="rounded border border-danger/30 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase text-danger sm:px-2 sm:text-[0.6875rem]">
+                                          Overdue
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </Link>
+                              </SwipeableEventCard>
+                            </Fragment>
                           );
                         })}
                       </div>

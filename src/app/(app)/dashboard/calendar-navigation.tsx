@@ -71,8 +71,16 @@ export function CalendarNavigation({
         >
           <ChevronLeftIcon />
         </button>
-        <div className="text-center">
+        <div className="flex flex-wrap items-center justify-center gap-2 text-center">
           <h2 className="text-lg font-semibold text-ink">{calendar.label}</h2>
+          <button
+            className="inline-flex min-h-9 items-center rounded border border-line bg-paper px-3 text-sm font-semibold text-ink disabled:opacity-60"
+            disabled={isPending}
+            type="button"
+            onClick={() => navigate(today.slice(0, 7), today)}
+          >
+            Today
+          </button>
         </div>
         <button
           aria-label="Next month"
