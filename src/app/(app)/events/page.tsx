@@ -129,7 +129,7 @@ export default async function EventsPage({
                 placeholder="Search name, account, date, amount"
                 type="search"
               />
-              <button className="min-h-11 rounded bg-ink px-4 text-sm font-semibold text-white">
+              <button className="min-h-11 rounded bg-mint px-4 text-sm font-semibold text-white">
                 Search
               </button>
             </div>
