@@ -176,7 +176,7 @@ export default async function DashboardPage({
       }
     ])
   );
-  const summary = summarizeOccurrences(calendarOccurrenceRows);
+  const summary = summarizeOccurrences(upcomingOccurrenceRows);
   const completedActivityMinor = summarizeCompletedActivity(
     balanceAnchorRecordedAt
       ? ((payments ?? []) as DashboardPayment[]).filter(
