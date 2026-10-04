@@ -18,7 +18,8 @@ const completeOccurrenceSchema = z.object({
 
 const balanceAnchorSchema = z.object({
   balance: z.string().trim().min(1),
-  month: z.string().regex(/^\d{4}-\d{2}$/).optional()
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  window: z.enum(["30", "60", "90"]).optional()
 });
 
 export async function completeOccurrenceAction(formData: FormData) {
@@ -67,7 +68,8 @@ export async function completeOccurrenceAction(formData: FormData) {
 export async function updateBalanceAnchorAction(formData: FormData) {
   const parsed = balanceAnchorSchema.safeParse({
     balance: formData.get("balance"),
-    month: formData.get("month") || undefined
+    month: formData.get("month") || undefined,
+    window: formData.get("window") || undefined
   });
 
   if (!parsed.success) {
@@ -104,7 +106,15 @@ export async function updateBalanceAnchorAction(formData: FormData) {
   }
 
   revalidatePath("/dashboard");
-  redirect(
-    parsed.data.month ? `/dashboard?month=${parsed.data.month}` : "/dashboard"
-  );
+  const params = new URLSearchParams();
+
+  if (parsed.data.month) {
+    params.set("month", parsed.data.month);
+  }
+
+  if (parsed.data.window && parsed.data.window !== "30") {
+    params.set("window", parsed.data.window);
+  }
+
+  redirect(params.size > 0 ? `/dashboard?${params.toString()}` : "/dashboard");
 }

@@ -7,6 +7,7 @@ import {
   formatMinorAmount,
   formatMinorAmountForInput
 } from "@/lib/money";
+import { buildWeeklyOccurrenceGroups } from "@/lib/dashboard-projections";
 import {
   DEFAULT_THEME_TOKEN,
   getColorTag
@@ -28,6 +29,11 @@ import {
 import { updateBalanceAnchorAction } from "./actions";
 import { CalendarNavigation } from "./calendar-navigation";
 import { DashboardPrefetch } from "./prefetch";
+import {
+  UpcomingWindowSelect,
+  UPCOMING_WINDOW_OPTIONS,
+  type UpcomingWindowDays
+} from "./upcoming-window-select";
 
 type DashboardPayment = {
   amount_minor: number;
@@ -41,7 +47,7 @@ export const runtime = "edge";
 export default async function DashboardPage({
   searchParams
 }: {
-  searchParams?: Promise<{ day?: string; month?: string }>;
+  searchParams?: Promise<{ day?: string; month?: string; window?: string }>;
 }) {
   const timer = createServerTimer("dashboard.page");
   const supabase = await createServerSupabaseClient();
@@ -56,13 +62,17 @@ export default async function DashboardPage({
   const params = await searchParams;
   const selectedMonth = normalizeMonthParam(params?.month, today);
   const selectedDay = normalizeDayParam(params?.day, selectedMonth);
+  const upcomingWindowDays = normalizeUpcomingWindowParam(params?.window);
   const provisionalCalendarFrame = buildCalendarFrame(selectedMonth, 0);
   const provisionalQueryBounds = expandCalendarFrameBounds(provisionalCalendarFrame);
+  const upcomingWindowEnd = formatDateOnly(
+    addUtcDays(parseDateOnly(today), upcomingWindowDays - 1)
+  );
   const queryBounds = {
     visibleEnd:
-      provisionalQueryBounds.visibleEnd > today
+      provisionalQueryBounds.visibleEnd > upcomingWindowEnd
         ? provisionalQueryBounds.visibleEnd
-        : today,
+        : upcomingWindowEnd,
     visibleStart:
       provisionalQueryBounds.visibleStart < today
       ? provisionalQueryBounds.visibleStart
@@ -141,10 +151,18 @@ export default async function DashboardPage({
       occurrence.due_date >= calendarFrame.visibleStart &&
       occurrence.due_date <= calendarFrame.visibleEnd
   );
+  const upcomingEnd = formatDateOnly(
+    addUtcDays(parseDateOnly(today), upcomingWindowDays - 1)
+  );
+  const upcomingOccurrenceRows = ((occurrences ?? []) as DashboardOccurrence[]).filter(
+    (occurrence) =>
+      occurrence.due_date >= calendarFrame.visibleStart &&
+      occurrence.due_date <= upcomingEnd
+  );
   const projectionOccurrenceRows = ((occurrences ?? []) as DashboardOccurrence[]).filter(
     (occurrence) =>
-      occurrence.due_date >= today &&
-      occurrence.due_date <= calendarFrame.visibleEnd
+      occurrence.due_date >= calendarFrame.visibleStart &&
+      occurrence.due_date <= upcomingEnd
   );
   const dayPanelDate = selectedDay ?? today;
   const dayPanelOccurrenceRows = ((occurrences ?? []) as DashboardOccurrence[]).filter(
@@ -171,7 +189,7 @@ export default async function DashboardPage({
       ? null
       : balanceAnchorAmountMinor + completedActivityMinor;
   const weeklyGroups = buildWeeklyOccurrenceGroups(
-    calendarOccurrenceRows,
+    upcomingOccurrenceRows,
     projectionOccurrenceRows,
     weekStartsOn,
     adjustedCurrentBalanceMinor,
@@ -205,7 +223,11 @@ export default async function DashboardPage({
             </div>
             <Link
               className="inline-flex min-h-10 items-center justify-center rounded border border-line bg-white px-3 text-sm font-semibold text-ink"
-              href={buildNewEventHref(selectedMonth, selectedDay)}
+              href={buildNewEventHref(
+                selectedMonth,
+                selectedDay,
+                upcomingWindowDays
+              )}
             >
               New event
             </Link>
@@ -217,6 +239,7 @@ export default async function DashboardPage({
             <section className="grid gap-4 rounded border border-line bg-white p-4 lg:grid-cols-[minmax(18rem,1.25fr)_repeat(3,minmax(0,1fr))] lg:items-end">
               <form action={updateBalanceAnchorAction} className="grid gap-2">
                 <input name="month" type="hidden" value={selectedMonth} />
+                <input name="window" type="hidden" value={upcomingWindowDays} />
                 <label className="grid gap-1 text-sm font-medium text-ink">
                   Current checking balance
                   <span className="grid min-h-12 grid-cols-[1fr_auto] overflow-hidden rounded border border-line bg-white">
@@ -293,10 +316,12 @@ export default async function DashboardPage({
               occurrences={dayPanelOccurrenceRows}
               returnTo={buildDashboardHref(
                 selectedMonth,
-                selectedDay ?? undefined
+                selectedDay ?? undefined,
+                upcomingWindowDays
               )}
               selectedDay={Boolean(selectedDay)}
               today={today}
+              windowDays={upcomingWindowDays}
             />
           </aside>
 
@@ -305,8 +330,15 @@ export default async function DashboardPage({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-semibold text-ink">Upcoming</h2>
-                    <p className="text-sm text-gray-700">{calendarFrame.label}</p>
+                    <p className="text-sm text-gray-700">
+                      {formatUpcomingWindowLabel(today, upcomingEnd)}
+                    </p>
                   </div>
+                  <UpcomingWindowSelect
+                    selectedDay={selectedDay}
+                    selectedMonth={selectedMonth}
+                    windowDays={upcomingWindowDays}
+                  />
                 </div>
 
                 {error ? (
@@ -315,19 +347,20 @@ export default async function DashboardPage({
                   </p>
                 ) : null}
 
-                {!error && calendarOccurrenceRows.length === 0 ? (
+                {!error && upcomingOccurrenceRows.length === 0 ? (
                   <div className="rounded border border-line bg-white p-5">
                     <p className="font-medium text-ink">
-                      No activity in this calendar view.
+                      No activity in this upcoming window.
                     </p>
                     <p className="mt-1 text-sm leading-6 text-gray-700">
-                      Create a plan or move to another month to find scheduled activity.
+                      Create a plan or choose a longer window to find scheduled activity.
                     </p>
                     <Link
                       className="mt-4 inline-flex min-h-11 items-center rounded bg-mint px-4 text-sm font-semibold text-white"
                       href={buildNewEventHref(
                         selectedMonth,
-                        selectedDay
+                        selectedDay,
+                        upcomingWindowDays
                       )}
                     >
                       New
@@ -394,7 +427,8 @@ export default async function DashboardPage({
                     : null;
                   const returnTo = buildDashboardHref(
                     selectedMonth,
-                    selectedDay ?? undefined
+                    selectedDay ?? undefined,
+                    upcomingWindowDays
                   );
                   const hasDayChanged =
                     index > 0 &&
@@ -549,7 +583,8 @@ function DayEventsPanel({
   occurrences,
   returnTo,
   selectedDay,
-  today
+  today,
+  windowDays
 }: {
   accountById: Map<string, { name: string }>;
   date: string;
@@ -557,6 +592,7 @@ function DayEventsPanel({
   returnTo: Route;
   selectedDay: boolean;
   today: string;
+  windowDays: UpcomingWindowDays;
 }) {
   return (
     <section className="grid gap-3 rounded border border-line bg-white p-4 lg:p-5">
@@ -632,7 +668,7 @@ function DayEventsPanel({
 
       <Link
         className="justify-self-center text-sm font-semibold text-mint"
-        href={buildDashboardHref(date.slice(0, 7), date)}
+        href={buildDashboardHref(date.slice(0, 7), date, windowDays)}
       >
         View day on calendar
       </Link>
@@ -650,100 +686,6 @@ function summarizeCompletedActivity(payments: DashboardPayment[]) {
       ? total + payment.amount_minor
       : total - payment.amount_minor;
   }, 0);
-}
-
-function buildWeeklyOccurrenceGroups(
-  occurrences: DashboardOccurrence[],
-  projectionOccurrences: DashboardOccurrence[],
-  weekStartsOn: number,
-  startingBalanceMinor: number | null,
-  selectedDay: string | null
-) {
-  const grouped = new Map<
-    string,
-    {
-      occurrences: DashboardOccurrence[];
-      projectedDeltaMinor: number;
-      weekEnd: string;
-      weekStart: string;
-    }
-  >();
-
-  for (const occurrence of occurrences) {
-    const weekStart = getWeekStartDate(occurrence.due_date, weekStartsOn);
-    const weekEnd = formatDateOnly(addUtcDays(parseDateOnly(weekStart), 6));
-    const group = grouped.get(weekStart) ?? {
-      occurrences: [],
-      projectedDeltaMinor: 0,
-      weekEnd,
-      weekStart
-    };
-
-    group.occurrences.push(occurrence);
-    group.projectedDeltaMinor += getProjectedOccurrenceDelta(occurrence);
-    grouped.set(weekStart, group);
-  }
-
-  if (selectedDay && grouped.size === 0) {
-    const weekStart = getWeekStartDate(selectedDay, weekStartsOn);
-    grouped.set(weekStart, {
-      occurrences: [],
-      projectedDeltaMinor: 0,
-      weekEnd: formatDateOnly(addUtcDays(parseDateOnly(weekStart), 6)),
-      weekStart
-    });
-  }
-
-  let runningProjectionMinor = startingBalanceMinor;
-  let projectionIndex = 0;
-  const sortedProjectionOccurrences = [...projectionOccurrences].sort((first, second) =>
-    first.due_date.localeCompare(second.due_date)
-  );
-
-  return Array.from(grouped.values())
-    .sort((first, second) => first.weekStart.localeCompare(second.weekStart))
-    .map((group) => {
-      const balanceTargetDate = selectedDay ?? group.weekEnd;
-
-      while (
-        runningProjectionMinor !== null &&
-        projectionIndex < sortedProjectionOccurrences.length &&
-        sortedProjectionOccurrences[projectionIndex]!.due_date <= balanceTargetDate
-      ) {
-        runningProjectionMinor += getProjectedOccurrenceDelta(
-          sortedProjectionOccurrences[projectionIndex]!
-        );
-        projectionIndex += 1;
-      }
-
-      return {
-        ...group,
-        endingBalanceMinor: runningProjectionMinor
-      };
-    });
-}
-
-function getProjectedOccurrenceDelta(occurrence: DashboardOccurrence) {
-  if (
-    occurrence.lifecycle_status !== "upcoming" ||
-    occurrence.amount_status === "unknown" ||
-    occurrence.expected_amount_minor === null
-  ) {
-    return 0;
-  }
-
-  return occurrence.financial_items?.kind === "income"
-    ? occurrence.expected_amount_minor
-    : -occurrence.expected_amount_minor;
-}
-
-function getWeekStartDate(date: string, weekStartsOn: number) {
-  const parsedDate = parseDateOnly(date);
-  const normalizedWeekStart = Math.min(Math.max(weekStartsOn, 0), 6);
-  const distanceFromWeekStart =
-    (parsedDate.getUTCDay() - normalizedWeekStart + 7) % 7;
-
-  return formatDateOnly(addUtcDays(parsedDate, -distanceFromWeekStart));
 }
 
 function addUtcDays(date: Date, days: number) {
@@ -783,6 +725,10 @@ function formatTimestampLabel(timestamp: string) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(timestamp));
+}
+
+function formatUpcomingWindowLabel(today: string, upcomingEnd: string) {
+  return `${formatShortDate(today)} - ${formatShortDate(upcomingEnd)}`;
 }
 
 function formatDelta(amountMinor: number, currencyCode: string) {
@@ -937,19 +883,41 @@ function normalizeDayParam(day: string | undefined, selectedMonth: string) {
   return day.slice(0, 7) === selectedMonth ? day : null;
 }
 
-function buildDashboardHref(month: string, day?: string) {
+function normalizeUpcomingWindowParam(
+  window: string | undefined
+): UpcomingWindowDays {
+  const parsedWindow = Number(window);
+
+  return UPCOMING_WINDOW_OPTIONS.includes(parsedWindow as UpcomingWindowDays)
+    ? (parsedWindow as UpcomingWindowDays)
+    : 30;
+}
+
+function buildDashboardHref(
+  month: string,
+  day?: string,
+  windowDays?: UpcomingWindowDays
+) {
   const params = new URLSearchParams({ month });
 
   if (day) {
     params.set("day", day);
   }
 
+  if (windowDays && windowDays !== 30) {
+    params.set("window", String(windowDays));
+  }
+
   return `/dashboard?${params.toString()}` as Route;
 }
 
-function buildNewEventHref(month: string, day: string | null) {
+function buildNewEventHref(
+  month: string,
+  day: string | null,
+  windowDays?: UpcomingWindowDays
+) {
   return `/events/new?returnTo=${encodeURIComponent(
-    buildDashboardHref(month, day ?? undefined)
+    buildDashboardHref(month, day ?? undefined, windowDays)
   )}` as Route;
 }
 
