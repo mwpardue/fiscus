@@ -3,10 +3,10 @@
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
-
-export const UPCOMING_WINDOW_OPTIONS = [30, 60, 90] as const;
-
-export type UpcomingWindowDays = (typeof UPCOMING_WINDOW_OPTIONS)[number];
+import {
+  UPCOMING_WINDOW_OPTIONS,
+  type UpcomingWindowDays
+} from "@/lib/dashboard-window";
 
 export function UpcomingWindowSelect({
   selectedDay,

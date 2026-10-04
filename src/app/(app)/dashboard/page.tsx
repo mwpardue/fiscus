@@ -9,6 +9,10 @@ import {
 } from "@/lib/money";
 import { buildWeeklyOccurrenceGroups } from "@/lib/dashboard-projections";
 import {
+  UPCOMING_WINDOW_OPTIONS,
+  type UpcomingWindowDays
+} from "@/lib/dashboard-window";
+import {
   DEFAULT_THEME_TOKEN,
   getColorTag
 } from "@/lib/color-tags";
@@ -29,11 +33,7 @@ import {
 import { updateBalanceAnchorAction } from "./actions";
 import { CalendarNavigation } from "./calendar-navigation";
 import { DashboardPrefetch } from "./prefetch";
-import {
-  UpcomingWindowSelect,
-  UPCOMING_WINDOW_OPTIONS,
-  type UpcomingWindowDays
-} from "./upcoming-window-select";
+import { UpcomingWindowSelect } from "./upcoming-window-select";
 
 type DashboardPayment = {
   amount_minor: number;
